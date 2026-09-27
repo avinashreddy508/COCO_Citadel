@@ -79,14 +79,14 @@ def redirect_uri(kind: str) -> str:
 CLIENTS = {
     "reader": {
         "server":        "CITADEL_AGENT_MCP_SERVER",
-        "client_id":     "Fo5auYqEm1tXDhw2SJWsbB7P59I=",
-        "client_secret": "yy9i62whlXae4exaDQjVQPgg1oqnFLIZg2DOvLHVZGc=",
+        "client_id":     os.environ["CITADEL_READER_CLIENT_ID"],
+        "client_secret": os.environ["CITADEL_READER_CLIENT_SECRET"],
         "role":          "CITADEL_MCP_READER_ROLE",
     },
     "action": {
         "server":        "CITADEL_ACTIONS_MCP_SERVER",
-        "client_id":     "kVpkwthaPNoiecwGtDjv/m8dNo4=",
-        "client_secret": "Dh247uwLbde5AOAnxYEkpk224pN1ImTm0qVzZI9jf8A=",
+        "client_id":     os.environ["CITADEL_ACTION_CLIENT_ID"],
+        "client_secret": os.environ["CITADEL_ACTION_CLIENT_SECRET"],
         # The action procedures guard on CURRENT_ROLE() IN ('CITADEL_COMPLIANCE_OFFICER',
         # 'CITADEL_ADMIN','SYSADMIN','ACCOUNTADMIN') and run EXECUTE AS CALLER, so the
         # MCP session must BE the compliance officer. That role inherits
