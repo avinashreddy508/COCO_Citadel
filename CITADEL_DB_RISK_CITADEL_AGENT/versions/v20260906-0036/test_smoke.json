@@ -1,0 +1,51 @@
+{
+  "content": [
+    {
+      "thinking": {
+        "text": "The user is asking what I can help with. No tools needed. I should describe my capabilities as CITADEL. I may also list available skills if relevant, but the user didn't specifically ask about skills \u2014 they asked what I can help with. I'll describe capabilities and can briefly mention skills."
+      },
+      "type": "thinking"
+    },
+    {
+      "text": "I'm CITADEL, your Risk, Fraud and Regulatory Intelligence Copilot for banking and NBFC compliance. I help risk analysts, compliance officers, auditors, and senior management get precise, evidence-backed answers \u2014 and I always explain the regulation behind every finding. Here's where I can help:\n\n**Fraud & AML**\n- Investigate suspicious transaction patterns: VELOCITY (5+ txns/hour), STRUCTURING (splits below the $10K CTR threshold), CROSS_BORDER (FATF grey/black-list), and ROUND_NUMBER (TBML indicators)\n- Surface open fraud flags with scores, flagged amounts, and pre-approved threshold rationale\n- Map each pattern to its regulatory basis (FinCEN SAR/CTR, 31 USC 5324 structuring, FATF R.19) and recommend action\n\n**Credit Risk**\n- Watch-list exposures (PD > 0.15), RWA, Expected Loss (ECL), and NPA accounts\n- Sector and rating breakdowns, with IFRS 9 provisioning and RBI IRAC 2023 (NPA 90-day rule) context\n\n**Liquidity**\n- LCR and NSFR ratios vs. the 100% Basel III minimum, breach-day trends, and HQLA positions\n- Supervisory notification obligations when a breach is detected\n\n**Regulatory Knowledge**\n- What a rule requires and why \u2014 Basel III (LCR Art. 412, NSFR Art. 428b, BCBS 239), FATF recommendations, FinCEN/BSA, RBI IRAC 2023, and internal AML policy\n\nI can also visualize results as charts and pull the underlying data into tables.\n\nA few things I **can't** do: file SARs, freeze accounts, or take any live action (I recommend only); provide legal advice; or access real-time data \u2014 results reflect the most recent loaded batch.\n\nI also have one built-in skill available:\n- **skill-development** \u2014 create, update, audit, or delete custom skills for this workspace.\n\nWhat would you like to look into first \u2014 a fraud investigation, a credit or liquidity review, or a regulatory question?",
+      "type": "text"
+    },
+    {
+      "suggested_queries": [
+        {
+          "query": "How many open fraud flags are there, broken down by fraud pattern and severity?"
+        },
+        {
+          "query": "Which credit facilities are on the watch-list with PD above 0.15, and what is their total RWA and Expected Loss?"
+        },
+        {
+          "query": "What is the current LCR versus the 100% minimum, and how many breach days have there been over the last 90 days?"
+        }
+      ],
+      "type": "suggested_queries"
+    }
+  ],
+  "metadata": {
+    "usage": {
+      "tokens_consumed": [
+        {
+          "context_window": 1000000,
+          "input_tokens": {
+            "cache_read": 13930,
+            "cache_write": 16959,
+            "total": 30893,
+            "uncached": 4
+          },
+          "model_name": "claude-opus-4-8",
+          "output_tokens": {
+            "total": 979
+          }
+        }
+      ]
+    }
+  },
+  "role": "assistant",
+  "schema_version": "v2",
+  "sequence_number": 186,
+  "status": "completed"
+}

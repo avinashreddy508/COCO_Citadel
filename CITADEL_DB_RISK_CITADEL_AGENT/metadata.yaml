@@ -1,0 +1,3 @@
+database: CITADEL_DB
+schema: RISK
+name: CITADEL_AGENT

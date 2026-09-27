@@ -1,0 +1,29 @@
+{
+  "name": "citadel-risk-copilot",
+  "version": "1.0.0",
+  "description": "CITADEL — Risk, Fraud and Regulatory Intelligence Copilot. Exposes the CITADEL_AGENT AI gateway (natural language risk/AML/liquidity Q&A) and action tools (FILE_SAR_DRAFT, FLAG_ACCOUNT, ESCALATE_CASE) as MCP tools in CoCo Desktop. Every answer cites Basel III, FATF, FinCEN, and RBI regulatory references.",
+  "author": "Avinash L — Snowflake CoCo CLI Hackathon 2026",
+  "snowflakeAccount": "JSTEYZM-MP60447",
+  "mcp": {
+    "servers": [
+      {
+        "name": "citadel-ai",
+        "url": "https://jsteyzm-mp60447.snowflakecomputing.com/api/v2/databases/CITADEL_DB/schemas/RISK/mcp-servers/CITADEL_AGENT_MCP_SERVER",
+        "description": "CITADEL AI gateway — ask questions about fraud flags, credit watch-list, LCR breaches, and regulatory obligations",
+        "auth_type": "snowflake_oauth",
+        "client_id_env": "CITADEL_READER_CLIENT_ID",
+        "client_secret_env": "CITADEL_READER_CLIENT_SECRET"
+      },
+      {
+        "name": "citadel-actions",
+        "url": "https://jsteyzm-mp60447.snowflakecomputing.com/api/v2/databases/CITADEL_DB/schemas/RISK/mcp-servers/CITADEL_ACTIONS_MCP_SERVER",
+        "description": "CITADEL action tools — FILE_SAR_DRAFT, FLAG_ACCOUNT, ESCALATE_CASE. Requires CITADEL_MCP_ACTION_ROLE.",
+        "auth_type": "snowflake_oauth",
+        "client_id_env": "CITADEL_ACTION_CLIENT_ID",
+        "client_secret_env": "CITADEL_ACTION_CLIENT_SECRET"
+      }
+    ]
+  },
+  "setupInstructions": "Set these environment variables before connecting:\n  CITADEL_READER_CLIENT_ID=<from SYSTEM$SHOW_OAUTH_CLIENT_SECRETS('CITADEL_MCP_READER_OAUTH')>\n  CITADEL_READER_CLIENT_SECRET=<same query>\n  CITADEL_ACTION_CLIENT_ID=<from SYSTEM$SHOW_OAUTH_CLIENT_SECRETS('CITADEL_MCP_ACTION_OAUTH')>\n  CITADEL_ACTION_CLIENT_SECRET=<same query>\n\nThen sign in via the OAuth flow when prompted. Your session will use CITADEL_MCP_READER_ROLE by default.\nFor action tools, ensure your Snowflake user has CITADEL_MCP_ACTION_ROLE granted.",
+  "tags": ["risk", "fraud", "AML", "compliance", "banking", "Basel III", "FATF", "FinCEN", "MCP"]
+}

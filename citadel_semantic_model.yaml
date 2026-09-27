@@ -1,0 +1,1264 @@
+name: CITADEL_RISK_INTELLIGENCE
+description: >
+  Citadel Risk, Fraud and Regulatory Intelligence — unified semantic model over
+  fraud alerts, credit exposures, and liquidity positions for compliance and risk teams.
+  Covers 50,000 transactions across 800 accounts for 500 customers, 300 credit
+  facilities with Basel III parameters, and 90 days of daily LCR/NSFR snapshots.
+  Threshold rationale columns carry regulatory citations (Basel III, FATF, FinCEN, RBI)
+  that can be quoted directly in audit findings and regulatory submissions.
+
+tables:
+  - name: risk_flags
+    description: >
+      Unified risk signal queue aggregating fraud, credit, and liquidity alerts.
+      Every row carries a self-contained evidence_payload (VARIANT) with all fields
+      a stored procedure needs to file a SAR, flag an account, or escalate a case
+      without additional joins. threshold_rationale gives the regulatory basis for
+      each rule so Cortex Analyst can cite it in answers.
+    base_table:
+      database: CITADEL_DB
+      schema: RISK
+      table: RISK_FLAGS
+    primary_key:
+      columns:
+        - FLAG_ID
+    dimensions:
+      - name: flag_domain
+        synonyms:
+          - risk domain
+          - risk category
+          - alert domain
+          - signal type
+        description: "Risk category: FRAUD, CREDIT, or LIQUIDITY"
+        expr: FLAG_DOMAIN
+        data_type: TEXT
+        sample_values:
+          - FRAUD
+          - CREDIT
+          - LIQUIDITY
+      - name: flag_type
+        synonyms:
+          - alert type
+          - fraud pattern
+          - breach type
+          - signal
+        description: >
+          Specific signal within the domain: VELOCITY, STRUCTURING, CROSS_BORDER,
+          ROUND_NUMBER (fraud); HIGH_PD, HIGH_UTILISATION, NPA (credit);
+          LCR_BREACH, NSFR_BREACH, DUAL_BREACH (liquidity)
+        expr: FLAG_TYPE
+        data_type: TEXT
+      - name: severity
+        synonyms:
+          - alert severity
+          - risk level
+          - priority
+          - criticality
+        description: "LOW | MEDIUM | HIGH | CRITICAL — escalating severity tiers"
+        expr: SEVERITY
+        data_type: TEXT
+        sample_values:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+      - name: flag_status
+        synonyms:
+          - alert status
+          - review status
+          - action status
+          - open closed
+        description: "OPEN | UNDER_REVIEW | ACTIONED | DISMISSED | CONFIRMED_FRAUD | CLEARED"
+        expr: FLAG_STATUS
+        data_type: TEXT
+      - name: threshold_rationale
+        synonyms:
+          - rule rationale
+          - regulatory basis
+          - rule reason
+          - threshold explanation
+          - regulatory citation
+          - compliance basis
+        description: >
+          Pitch-ready regulatory citation for why this threshold triggers a flag.
+          Examples: Basel III Art. 412 for LCR breach, 31 CFR 1010.314 for structuring,
+          FATF Recommendation 19 for cross-border transfers.
+        expr: THRESHOLD_RATIONALE
+        data_type: TEXT
+      - name: action_taken
+        synonyms:
+          - action
+          - outcome
+          - response
+          - disposition
+        description: "SAR_FILED | ACCOUNT_FLAGGED | CASE_ESCALATED | DISMISSED — set by action stored procedures"
+        expr: ACTION_TAKEN
+        data_type: TEXT
+    time_dimensions:
+      - name: flagged_at
+        synonyms:
+          - flag date
+          - alert date
+          - detection date
+          - signal date
+        description: "Timestamp when the risk signal was created"
+        expr: CREATED_AT
+        data_type: TIMESTAMP
+    facts:
+      - name: flag_score
+        synonyms:
+          - risk score
+          - alert score
+          - composite risk score
+          - fraud score
+        description: >
+          0-100 composite risk score. Interpretation: 0-40 low, 41-65 medium,
+          66-100 high risk (internal calibration). Higher = more suspicious.
+        expr: FLAG_SCORE
+        data_type: NUMBER
+        default_aggregation: avg
+      - name: threshold_value
+        synonyms:
+          - breached value
+          - actual value
+          - observed value
+        description: "Actual metric value that crossed the threshold (e.g. lcr_ratio=0.82 when threshold=1.0)"
+        expr: THRESHOLD_VALUE
+        data_type: NUMBER
+        default_aggregation: avg
+      - name: threshold_limit
+        synonyms:
+          - threshold
+          - limit
+          - regulatory minimum
+        description: "The regulatory or policy threshold that was breached"
+        expr: THRESHOLD_LIMIT
+        data_type: NUMBER
+        default_aggregation: avg
+    filters:
+      - name: open_flags
+        synonyms:
+          - active alerts
+          - unactioned flags
+          - pending review
+        description: "Flags not yet actioned or dismissed"
+        expr: FLAG_STATUS = 'OPEN'
+      - name: fraud_flags
+        synonyms:
+          - fraud alerts
+          - fraud signals
+          - suspicious transactions
+        description: "Risk flags in the FRAUD domain"
+        expr: FLAG_DOMAIN = 'FRAUD'
+      - name: credit_flags
+        synonyms:
+          - credit alerts
+          - credit risk signals
+          - watch list
+        description: "Risk flags in the CREDIT domain"
+        expr: FLAG_DOMAIN = 'CREDIT'
+      - name: liquidity_flags
+        synonyms:
+          - liquidity alerts
+          - LCR breach flags
+          - liquidity risk signals
+        description: "Risk flags in the LIQUIDITY domain"
+        expr: FLAG_DOMAIN = 'LIQUIDITY'
+      - name: critical_and_high_flags
+        synonyms:
+          - high priority alerts
+          - urgent flags
+          - escalation candidates
+        description: "Flags with severity HIGH or CRITICAL"
+        expr: SEVERITY IN ('HIGH', 'CRITICAL')
+    metrics:
+      - name: open_flag_count
+        synonyms:
+          - open alerts
+          - active flags
+          - unreviewed alerts
+          - open risk alerts
+        description: "Count of risk flags currently in OPEN status"
+        expr: SUM(CASE WHEN FLAG_STATUS = 'OPEN' THEN 1 ELSE 0 END)
+      - name: critical_flag_count
+        synonyms:
+          - critical alerts
+          - critical risk count
+          - urgent alerts count
+        description: "Count of CRITICAL severity flags requiring immediate escalation"
+        expr: SUM(CASE WHEN SEVERITY = 'CRITICAL' THEN 1 ELSE 0 END)
+      - name: avg_fraud_score
+        synonyms:
+          - average risk score
+          - mean flag score
+          - average fraud risk
+        description: "Average composite risk score across all fraud domain flags"
+        expr: AVG(CASE WHEN FLAG_DOMAIN = 'FRAUD' THEN FLAG_SCORE END)
+
+  - name: transactions
+    description: >
+      50,000 bank transactions with injected fraud patterns. Four fraud signals:
+      VELOCITY (5+ txns per hour same account — FinCEN SAR 35a),
+      STRUCTURING ($9,800-$9,999 cash deposits — 31 CFR 1010.314),
+      CROSS_BORDER (wire to FATF grey/black-list country — FATF R.19),
+      ROUND_NUMBER (>$10K round amounts — TBML indicator).
+      ~18% of transactions carry a fraud flag.
+    base_table:
+      database: CITADEL_DB
+      schema: RISK
+      table: TRANSACTIONS
+    primary_key:
+      columns:
+        - TXN_ID
+    dimensions:
+      - name: fraud_pattern
+        synonyms:
+          - fraud type
+          - alert type
+          - flag type
+          - suspicious activity type
+          - fraud category
+        description: "VELOCITY | STRUCTURING | CROSS_BORDER | ROUND_NUMBER | null for clean transactions"
+        expr: FRAUD_PATTERN
+        data_type: TEXT
+        sample_values:
+          - VELOCITY
+          - STRUCTURING
+          - CROSS_BORDER
+          - ROUND_NUMBER
+      - name: channel
+        synonyms:
+          - payment method
+          - payment channel
+          - transaction mode
+          - transfer method
+        description: "UPI | NEFT | RTGS | ATM | POS | WIRE | INTERNAL"
+        expr: CHANNEL
+        data_type: TEXT
+      - name: txn_type
+        synonyms:
+          - direction
+          - debit or credit
+          - flow direction
+        description: "DEBIT or CREDIT"
+        expr: TXN_TYPE
+        data_type: TEXT
+      - name: country_code
+        synonyms:
+          - destination country
+          - recipient country
+          - country
+          - jurisdiction
+        description: "ISO-3 destination country code"
+        expr: COUNTRY_CODE
+        data_type: TEXT
+      - name: is_high_risk_country
+        synonyms:
+          - high risk destination
+          - FATF listed
+          - sanctioned jurisdiction
+          - grey list country
+        description: "TRUE if destination is on FATF grey or black list"
+        expr: HIGH_RISK_COUNTRY
+        data_type: BOOLEAN
+      - name: review_status
+        synonyms:
+          - investigation status
+          - review outcome
+          - clearance status
+        description: "PENDING | CLEARED | CONFIRMED_FRAUD"
+        expr: REVIEW_STATUS
+        data_type: TEXT
+      - name: txn_category
+        synonyms:
+          - transaction purpose
+          - payment purpose
+          - category
+        description: "SALARY | RENT | TRANSFER | PURCHASE | CASH | UTILITY | INSURANCE | OTHER"
+        expr: TXN_CATEGORY
+        data_type: TEXT
+      - name: is_flagged
+        synonyms:
+          - flagged
+          - suspicious
+          - alerted
+        description: "TRUE if the transaction carries any fraud pattern flag"
+        expr: IS_FLAGGED
+        data_type: BOOLEAN
+    time_dimensions:
+      - name: txn_date
+        synonyms:
+          - transaction date
+          - payment date
+          - date
+          - transaction time
+        description: "Timestamp of the transaction"
+        expr: TXN_TS
+        data_type: TIMESTAMP
+    facts:
+      - name: amount
+        synonyms:
+          - transaction amount
+          - payment amount
+          - value
+          - transfer amount
+        description: "Transaction amount in USD"
+        expr: AMOUNT
+        data_type: NUMBER
+        default_aggregation: sum
+      - name: flag_score
+        synonyms:
+          - fraud score
+          - risk score
+          - alert score
+          - suspicion score
+        description: >
+          0-100 composite fraud risk score. Threshold: >65 = high risk (internal calibration).
+          VELOCITY scores 65-95, STRUCTURING 60-85, CROSS_BORDER 70-95, ROUND_NUMBER 55-75.
+        expr: FLAG_SCORE
+        data_type: NUMBER
+        default_aggregation: avg
+    filters:
+      - name: flagged_transactions
+        synonyms:
+          - suspicious transactions
+          - fraud flagged
+          - alerted transactions
+        description: "Transactions with any fraud pattern flag"
+        expr: IS_FLAGGED = TRUE
+      - name: this_week
+        synonyms:
+          - last 7 days
+          - recent transactions
+          - current week
+        description: "Transactions in the last 7 days"
+        expr: TXN_TS >= DATEADD(day, -7, CURRENT_TIMESTAMP())
+      - name: high_risk_country_transactions
+        synonyms:
+          - cross border fraud
+          - FATF country transactions
+          - sanctioned country transfers
+        description: "Transactions to FATF grey/black-list jurisdictions"
+        expr: HIGH_RISK_COUNTRY = TRUE
+      - name: structuring_pattern
+        synonyms:
+          - structuring transactions
+          - sub threshold deposits
+          - smurfing
+        description: "Transactions with STRUCTURING fraud pattern"
+        expr: FRAUD_PATTERN = 'STRUCTURING'
+    metrics:
+      - name: total_flagged_transactions
+        synonyms:
+          - fraud alerts count
+          - suspicious transaction count
+          - flagged txn count
+        description: "Total count of transactions carrying any fraud flag"
+        expr: SUM(CASE WHEN IS_FLAGGED = TRUE THEN 1 ELSE 0 END)
+      - name: total_flagged_amount
+        synonyms:
+          - suspicious transaction value
+          - fraud exposure amount
+          - flagged transaction volume
+        description: "Total USD value of all flagged transactions"
+        expr: SUM(CASE WHEN IS_FLAGGED = TRUE THEN AMOUNT ELSE 0 END)
+      - name: flagged_transaction_rate
+        synonyms:
+          - fraud rate
+          - flag rate
+          - suspicious transaction percentage
+        description: "Percentage of transactions that carry a fraud flag (flagged / total * 100)"
+        expr: ROUND(SUM(CASE WHEN IS_FLAGGED = TRUE THEN 1.0 ELSE 0 END) * 100.0 / NULLIF(COUNT(TXN_ID), 0), 2)
+
+  - name: accounts
+    description: >
+      800 bank accounts across SAVINGS, CURRENT, LOAN, CREDIT_CARD, OVERDRAFT.
+      NPA (Non-Performing Asset) flag set for accounts in SUBSTANDARD/DOUBTFUL/LOSS
+      classification per RBI Master Circular on IRAC 2023.
+      Frozen accounts cannot transact pending investigation.
+    base_table:
+      database: CITADEL_DB
+      schema: RISK
+      table: ACCOUNTS
+    primary_key:
+      columns:
+        - ACCOUNT_ID
+    dimensions:
+      - name: account_type
+        synonyms:
+          - product type
+          - account category
+          - facility type
+          - account kind
+        description: "SAVINGS | CURRENT | LOAN | CREDIT_CARD | OVERDRAFT"
+        expr: ACCOUNT_TYPE
+        data_type: TEXT
+      - name: account_status
+        synonyms:
+          - status
+          - account condition
+          - account state
+        description: "ACTIVE | DORMANT | NPA | FROZEN | CLOSED"
+        expr: STATUS
+        data_type: TEXT
+        sample_values:
+          - ACTIVE
+          - DORMANT
+          - NPA
+          - FROZEN
+          - CLOSED
+      - name: is_npa
+        synonyms:
+          - NPA flag
+          - non-performing
+          - bad loan
+          - defaulted account
+          - stressed account
+        description: >
+          TRUE if account is classified as Non-Performing Asset.
+          RBI IRAC norm: 90 days past due triggers Substandard classification.
+        expr: NPA_FLAG
+        data_type: BOOLEAN
+      - name: npa_classification
+        synonyms:
+          - NPA category
+          - loan classification
+          - asset quality class
+        description: "SUBSTANDARD | DOUBTFUL | LOSS — RBI/Basel III NPA sub-categories with escalating provisioning requirements"
+        expr: NPA_CLASSIFICATION
+        data_type: TEXT
+      - name: currency
+        synonyms:
+          - account currency
+          - denomination
+        description: "ISO currency code"
+        expr: CURRENCY
+        data_type: TEXT
+      - name: branch_code
+        synonyms:
+          - branch
+          - branch ID
+          - office
+        description: "Branch identifier"
+        expr: BRANCH_CODE
+        data_type: TEXT
+    facts:
+      - name: balance
+        synonyms:
+          - account balance
+          - current balance
+          - outstanding balance
+          - book balance
+        description: "Current account balance in account currency. Negative for loan/overdraft = outstanding debt."
+        expr: BALANCE
+        data_type: NUMBER
+        default_aggregation: sum
+      - name: credit_limit
+        synonyms:
+          - limit
+          - credit line
+          - sanctioned limit
+          - approved limit
+        description: "Approved credit limit for revolving products (CREDIT_CARD, OVERDRAFT, CURRENT)"
+        expr: CREDIT_LIMIT
+        data_type: NUMBER
+        default_aggregation: sum
+      - name: utilisation_pct
+        synonyms:
+          - utilisation rate
+          - utilization
+          - drawdown percent
+          - limit usage
+        description: >
+          Outstanding divided by credit_limit times 100.
+          Breach threshold: >90% per internal Credit Policy §6.1.
+        expr: UTILISATION_PCT
+        data_type: NUMBER
+        default_aggregation: avg
+    filters:
+      - name: npa_accounts
+        synonyms:
+          - non performing accounts
+          - bad loans
+          - defaulted accounts
+        description: "Accounts classified as Non-Performing Assets"
+        expr: NPA_FLAG = TRUE
+      - name: active_accounts
+        synonyms:
+          - live accounts
+          - operating accounts
+        description: "Accounts in ACTIVE status"
+        expr: STATUS = 'ACTIVE'
+      - name: frozen_accounts
+        synonyms:
+          - blocked accounts
+          - suspended accounts
+          - restricted accounts
+        description: "Accounts frozen pending investigation"
+        expr: STATUS = 'FROZEN'
+      - name: over_utilised_accounts
+        synonyms:
+          - high utilisation
+          - over limit
+          - maxed out
+        description: "Accounts with credit utilisation above 90% — internal policy breach"
+        expr: UTILISATION_PCT > 90
+    metrics:
+      - name: npa_account_count
+        synonyms:
+          - NPA count
+          - non-performing accounts
+          - bad loan accounts
+        description: "Number of accounts classified as Non-Performing Assets"
+        expr: SUM(CASE WHEN NPA_FLAG = TRUE THEN 1 ELSE 0 END)
+      - name: total_balance
+        synonyms:
+          - total book balance
+          - aggregate balance
+          - portfolio balance
+        description: "Total balance across all accounts in USD"
+        expr: SUM(BALANCE)
+      - name: avg_utilisation
+        synonyms:
+          - average utilisation
+          - mean drawdown
+          - portfolio utilisation
+        description: "Average credit utilisation across revolving accounts"
+        expr: AVG(CASE WHEN CREDIT_LIMIT IS NOT NULL THEN UTILISATION_PCT END)
+
+  - name: customers
+    description: >
+      500 bank customers across RETAIL, SME, CORPORATE, PRIVATE_BANKING segments.
+      PEP (Politically Exposed Person) flag triggers FATF Recommendation 12 enhanced
+      due diligence. Sanction flag triggers immediate account freeze per OFAC/UN rules.
+    base_table:
+      database: CITADEL_DB
+      schema: RISK
+      table: CUSTOMERS
+    primary_key:
+      columns:
+        - CUSTOMER_ID
+    dimensions:
+      - name: segment
+        synonyms:
+          - customer segment
+          - customer tier
+          - customer category
+          - client type
+          - banking segment
+        description: "RETAIL | SME | CORPORATE | PRIVATE_BANKING"
+        expr: SEGMENT
+        data_type: TEXT
+        sample_values:
+          - RETAIL
+          - SME
+          - CORPORATE
+          - PRIVATE_BANKING
+      - name: risk_rating
+        synonyms:
+          - customer risk
+          - risk tier
+          - risk classification
+          - risk category
+        description: "LOW | MEDIUM | HIGH — internal customer risk rating"
+        expr: RISK_RATING
+        data_type: TEXT
+      - name: kyc_status
+        synonyms:
+          - KYC
+          - know your customer status
+          - verification status
+          - due diligence status
+        description: "VERIFIED | PENDING | EXPIRED | REJECTED"
+        expr: KYC_STATUS
+        data_type: TEXT
+      - name: is_pep
+        synonyms:
+          - PEP
+          - politically exposed person
+          - government official
+          - public figure
+        description: >
+          TRUE if customer is a Politically Exposed Person.
+          Triggers FATF Recommendation 12 enhanced due diligence and
+          senior management approval for account opening/maintenance.
+        expr: PEP_FLAG
+        data_type: BOOLEAN
+      - name: is_sanctioned
+        synonyms:
+          - sanctions flag
+          - OFAC hit
+          - sanctioned individual
+          - UN sanctions
+        description: >
+          TRUE if customer matches OFAC/UN/EU sanctions list.
+          Triggers immediate account freeze and regulatory notification.
+        expr: SANCTION_FLAG
+        data_type: BOOLEAN
+      - name: nationality
+        synonyms:
+          - country
+          - citizenship
+          - country of origin
+        description: "Customer nationality (ISO country name)"
+        expr: NATIONALITY
+        data_type: TEXT
+    filters:
+      - name: high_risk_customers
+        synonyms:
+          - risky customers
+          - elevated risk
+          - watch list customers
+        description: "Customers with HIGH risk rating"
+        expr: RISK_RATING = 'HIGH'
+      - name: pep_customers
+        synonyms:
+          - politically exposed
+          - PEP clients
+          - government linked
+        description: "Politically Exposed Persons requiring FATF R.12 enhanced due diligence"
+        expr: PEP_FLAG = TRUE
+      - name: sanctioned_customers
+        synonyms:
+          - OFAC matched
+          - sanctioned clients
+          - blocked customers
+        description: "Customers matching sanctions lists — immediate account action required"
+        expr: SANCTION_FLAG = TRUE
+      - name: expired_kyc
+        synonyms:
+          - stale KYC
+          - lapsed KYC
+          - outdated due diligence
+        description: "Customers with EXPIRED KYC status requiring refresh"
+        expr: KYC_STATUS = 'EXPIRED'
+    metrics:
+      - name: high_risk_customer_count
+        synonyms:
+          - high risk customers
+          - risky customer count
+          - elevated risk customers
+        description: "Number of customers rated HIGH risk"
+        expr: SUM(CASE WHEN RISK_RATING = 'HIGH' THEN 1 ELSE 0 END)
+      - name: pep_customer_count
+        synonyms:
+          - PEP count
+          - politically exposed count
+          - PEP customers
+        description: "Number of PEP customers requiring FATF R.12 enhanced due diligence"
+        expr: SUM(CASE WHEN PEP_FLAG = TRUE THEN 1 ELSE 0 END)
+      - name: sanctioned_customer_count
+        synonyms:
+          - sanctions hits
+          - OFAC matches
+          - sanctioned count
+        description: "Number of customers matching active sanctions lists"
+        expr: SUM(CASE WHEN SANCTION_FLAG = TRUE THEN 1 ELSE 0 END)
+
+  - name: credit_exposures
+    description: >
+      300 credit facilities with Basel III risk parameters (PD, LGD, EAD, RWA).
+      Watch-list threshold: PD > 0.15 (sub-investment grade, BB- equivalent).
+      RWA computed using Basel III standardised approach. Expected Loss = PD x LGD x EAD
+      is the IFRS 9 provisioning basis.
+    base_table:
+      database: CITADEL_DB
+      schema: RISK
+      table: CREDIT_EXPOSURES
+    primary_key:
+      columns:
+        - EXPOSURE_ID
+    dimensions:
+      - name: facility_type
+        synonyms:
+          - loan type
+          - credit product
+          - facility
+          - credit facility type
+          - loan category
+        description: "TERM_LOAN | REVOLVING | MORTGAGE | LETTER_OF_CREDIT | GUARANTEE | WORKING_CAPITAL"
+        expr: FACILITY_TYPE
+        data_type: TEXT
+      - name: internal_rating
+        synonyms:
+          - credit rating
+          - internal grade
+          - obligor rating
+          - borrower rating
+        description: "AAA | AA | A | BBB | BB | B | CCC | D — internal credit rating scale mapping to S&P equivalents"
+        expr: INTERNAL_RATING
+        data_type: TEXT
+      - name: sector
+        synonyms:
+          - industry
+          - industry sector
+          - business sector
+          - economic sector
+        description: "REAL_ESTATE | MANUFACTURING | TRADE | SERVICES | AGRICULTURE | TECHNOLOGY | HEALTHCARE | ENERGY"
+        expr: SECTOR
+        data_type: TEXT
+      - name: is_watch_list
+        synonyms:
+          - watch list
+          - high PD
+          - sub-investment grade
+          - distressed borrower
+          - credit watch
+        description: >
+          TRUE when PD > 0.15. Basel III ICAAP internal watch-list threshold.
+          Equivalent to BB-/B+ or below on standard rating scale.
+          Triggers quarterly enhanced credit review per Credit Policy §4.2.
+        expr: WATCH_LIST_FLAG
+        data_type: BOOLEAN
+      - name: collateral_type
+        synonyms:
+          - security type
+          - collateral
+          - backing
+        description: "PROPERTY | EQUITY | FIXED_DEPOSIT | VEHICLE | MACHINERY | UNSECURED"
+        expr: COLLATERAL_TYPE
+        data_type: TEXT
+    facts:
+      - name: outstanding
+        synonyms:
+          - outstanding balance
+          - drawn amount
+          - loan balance
+          - credit outstanding
+        description: "Outstanding facility balance in USD"
+        expr: OUTSTANDING
+        data_type: NUMBER
+        default_aggregation: sum
+      - name: pd_score
+        synonyms:
+          - probability of default
+          - PD
+          - default probability
+          - default risk
+        description: >
+          Probability of Default (0 to 1).
+          Watch-list threshold: PD > 0.15 (Basel III ICAAP internal calibration).
+          Stage 2 IFRS 9 trigger: significant increase in credit risk (typically PD > 0.10).
+        expr: PD_SCORE
+        data_type: NUMBER
+        default_aggregation: avg
+      - name: lgd
+        synonyms:
+          - loss given default
+          - LGD
+          - loss severity
+          - recovery rate complement
+        description: "Loss Given Default (0 to 1). Fraction of exposure expected to be lost if counterparty defaults."
+        expr: LGD
+        data_type: NUMBER
+        default_aggregation: avg
+      - name: ead
+        synonyms:
+          - exposure at default
+          - EAD
+          - credit exposure
+          - default exposure
+        description: "Exposure at Default in USD — expected outstanding balance at time of default"
+        expr: EAD
+        data_type: NUMBER
+        default_aggregation: sum
+      - name: expected_loss
+        synonyms:
+          - EL
+          - expected credit loss
+          - ECL
+          - provision
+          - IFRS 9 provision
+        description: >
+          Expected Loss = PD x LGD x EAD in USD.
+          IFRS 9 Stage 1 provisioning basis (12-month ECL).
+          Stage 3 = lifetime ECL for non-performing exposures.
+        expr: EXPECTED_LOSS
+        data_type: NUMBER
+        default_aggregation: sum
+      - name: rwa
+        synonyms:
+          - risk weighted assets
+          - RWA
+          - capital charge
+          - regulatory capital
+        description: >
+          Risk-Weighted Assets = EAD x risk_weight_pct / 100 in USD.
+          Basel III Pillar 1 minimum capital: 8% of total RWA.
+          Total capital requirement = RWA x 8% (plus buffers).
+        expr: RWA
+        data_type: NUMBER
+        default_aggregation: sum
+      - name: utilisation_pct
+        synonyms:
+          - utilisation
+          - drawdown rate
+          - credit usage
+          - facility usage
+        description: >
+          Outstanding / credit_limit x 100.
+          Breach threshold: >90% per Credit Policy §6.1.
+        expr: UTILISATION_PCT
+        data_type: NUMBER
+        default_aggregation: avg
+    filters:
+      - name: watch_list_exposures
+        synonyms:
+          - watch list facilities
+          - high PD exposures
+          - sub investment grade
+          - distressed loans
+        description: "Credit facilities on watch-list (PD > 0.15)"
+        expr: WATCH_LIST_FLAG = TRUE
+      - name: real_estate_sector
+        synonyms:
+          - real estate loans
+          - property sector
+          - mortgage portfolio
+        description: "Credit exposures to real estate sector — concentration risk indicator"
+        expr: SECTOR = 'REAL_ESTATE'
+      - name: unsecured_exposures
+        synonyms:
+          - unsecured loans
+          - no collateral
+          - clean lending
+        description: "Exposures with UNSECURED collateral type — higher loss severity"
+        expr: COLLATERAL_TYPE = 'UNSECURED'
+    metrics:
+      - name: watch_list_count
+        synonyms:
+          - watch list exposures
+          - high PD borrowers
+          - sub investment grade count
+          - distressed borrower count
+        description: "Number of credit facilities on watch-list (PD > 0.15 — Basel III ICAAP threshold)"
+        expr: SUM(CASE WHEN WATCH_LIST_FLAG = TRUE THEN 1 ELSE 0 END)
+      - name: total_rwa
+        synonyms:
+          - total risk weighted assets
+          - total RWA
+          - regulatory capital base
+          - capital charge
+        description: >
+          Total Risk-Weighted Assets across all facilities in USD.
+          Basel III minimum capital: 8% of RWA (Pillar 1).
+          CET1 minimum: 4.5% of RWA; Tier 1: 6%; Total: 8%.
+        expr: SUM(RWA)
+      - name: total_expected_loss
+        synonyms:
+          - total ECL
+          - total provision
+          - expected credit loss total
+          - IFRS 9 provision total
+        description: "Total Expected Loss (PD x LGD x EAD) across all facilities — IFRS 9 provisioning basis"
+        expr: SUM(EXPECTED_LOSS)
+      - name: avg_pd
+        synonyms:
+          - average PD
+          - portfolio PD
+          - weighted average default probability
+          - mean probability of default
+        description: "Average Probability of Default across all credit facilities"
+        expr: AVG(PD_SCORE)
+      - name: real_estate_outstanding
+        synonyms:
+          - real estate exposure
+          - property sector outstanding
+          - real estate concentration
+        description: "Total outstanding balance for real estate sector — concentration risk indicator"
+        expr: SUM(CASE WHEN SECTOR = 'REAL_ESTATE' THEN OUTSTANDING ELSE 0 END)
+
+  - name: liquidity_positions
+    description: >
+      90 days of daily liquidity snapshots across 5 tenor buckets (0-7d, 8-30d, 31-90d,
+      91-365d, over 1yr). LCR breach: ratio < 1.0 (100%) — Basel III Art. 412 minimum.
+      NSFR breach: ratio < 1.0 — Basel III Art. 428b minimum. 22 of 90 days show an
+      LCR breach in the sample data. Breach days require supervisory notification within
+      2 business days.
+    base_table:
+      database: CITADEL_DB
+      schema: RISK
+      table: LIQUIDITY_POSITIONS
+    primary_key:
+      columns:
+        - POSITION_ID
+    dimensions:
+      - name: tenor_bucket
+        synonyms:
+          - time bucket
+          - maturity bucket
+          - tenor
+          - time band
+          - liquidity horizon
+        description: "0_7D | 8_30D | 31_90D | 91_365D | OVER_1YR — liquidity time horizon buckets"
+        expr: TENOR_BUCKET
+        data_type: TEXT
+        sample_values:
+          - 0_7D
+          - 8_30D
+          - 31_90D
+          - 91_365D
+          - OVER_1YR
+      - name: is_lcr_breach
+        synonyms:
+          - LCR breach
+          - liquidity breach
+          - below minimum LCR
+          - LCR violation
+        description: >
+          TRUE when LCR ratio < 1.0 (100%).
+          Basel III Art. 412 minimum: LCR >= 100%.
+          Breach requires supervisory notification within 2 business days (BCBS Jan 2013 §415).
+        expr: LCR_BREACH
+        data_type: BOOLEAN
+      - name: is_nsfr_breach
+        synonyms:
+          - NSFR breach
+          - stable funding breach
+          - NSFR violation
+        description: >
+          TRUE when NSFR ratio < 1.0 (100%).
+          Basel III Art. 428b minimum NSFR: 100%.
+          Effective globally since January 2021.
+        expr: NSFR_BREACH
+        data_type: BOOLEAN
+      - name: stress_scenario
+        synonyms:
+          - scenario
+          - stress test
+          - stress level
+        description: "BASE | MODERATE | SEVERE — liquidity stress test scenario"
+        expr: STRESS_SCENARIO
+        data_type: TEXT
+    time_dimensions:
+      - name: position_date
+        synonyms:
+          - date
+          - report date
+          - liquidity date
+          - snapshot date
+        description: "Date of the daily liquidity snapshot"
+        expr: POSITION_DATE
+        data_type: DATE
+    facts:
+      - name: lcr_ratio
+        synonyms:
+          - LCR
+          - liquidity coverage ratio
+          - coverage ratio
+          - liquidity ratio
+        description: >
+          LCR = Total HQLA / Net cash outflows over 30-day stress period.
+          Regulatory minimum: 1.0 (100%) per Basel III Art. 412.
+          Breach threshold: < 1.0. Values < 0.9 trigger CRITICAL severity.
+        expr: LCR_RATIO
+        data_type: NUMBER
+        default_aggregation: avg
+      - name: nsfr_ratio
+        synonyms:
+          - NSFR
+          - net stable funding ratio
+          - stable funding ratio
+          - structural liquidity ratio
+        description: >
+          NSFR = Available Stable Funding / Required Stable Funding.
+          Regulatory minimum: 1.0 (100%) per Basel III Art. 428b.
+        expr: NSFR_RATIO
+        data_type: NUMBER
+        default_aggregation: avg
+      - name: inflow
+        synonyms:
+          - cash inflow
+          - liquidity inflow
+          - receivables
+        description: "Cash inflows for the tenor bucket in USD"
+        expr: INFLOW
+        data_type: NUMBER
+        default_aggregation: sum
+      - name: outflow
+        synonyms:
+          - cash outflow
+          - liquidity outflow
+          - payables
+        description: "Cash outflows for the tenor bucket in USD"
+        expr: OUTFLOW
+        data_type: NUMBER
+        default_aggregation: sum
+      - name: net_position
+        synonyms:
+          - net cash position
+          - net liquidity
+          - net flow
+          - liquidity gap
+        description: "Net liquidity position = inflow minus outflow for this tenor bucket"
+        expr: NET_POSITION
+        data_type: NUMBER
+        default_aggregation: sum
+      - name: hqla_total
+        synonyms:
+          - HQLA
+          - high quality liquid assets
+          - liquidity buffer
+          - liquid asset buffer
+        description: "Total High Quality Liquid Assets (Level 1 cash/central bank + Level 2 govt bonds). LCR numerator."
+        expr: LCR_NUMERATOR
+        data_type: NUMBER
+        default_aggregation: sum
+    filters:
+      - name: lcr_breach_days
+        synonyms:
+          - LCR breaches
+          - below minimum LCR
+          - liquidity deficit days
+        description: "Days where LCR fell below 100% — Basel III Art. 412 breach"
+        expr: LCR_BREACH = TRUE
+      - name: short_term_buckets
+        synonyms:
+          - overnight liquidity
+          - short term
+          - immediate liquidity
+        description: "Short-term tenor buckets (0-7 days and 8-30 days) — most critical for intraday LCR"
+        expr: TENOR_BUCKET IN ('0_7D', '8_30D')
+      - name: base_scenario
+        synonyms:
+          - normal scenario
+          - no stress
+          - baseline
+        description: "Base (non-stress) scenario positions"
+        expr: STRESS_SCENARIO = 'BASE'
+    metrics:
+      - name: lcr_breach_day_count
+        synonyms:
+          - LCR breach days
+          - liquidity breach count
+          - days below minimum LCR
+          - LCR violations
+        description: >
+          Number of position rows where LCR fell below 100%.
+          Basel III Art. 412 breach. Each breach day requires supervisory notification.
+        expr: SUM(CASE WHEN LCR_BREACH = TRUE THEN 1 ELSE 0 END)
+      - name: avg_lcr_ratio
+        synonyms:
+          - average LCR
+          - mean liquidity coverage ratio
+          - LCR average
+          - average coverage ratio
+        description: "Average LCR ratio across all position dates and buckets (target >= 1.0 per Basel III)"
+        expr: AVG(LCR_RATIO)
+      - name: avg_lcr_last_30_days
+        synonyms:
+          - 30 day average LCR
+          - monthly LCR average
+          - recent LCR trend
+          - LCR last month
+        description: "Average LCR ratio over the last 30 days"
+        expr: AVG(CASE WHEN POSITION_DATE >= DATEADD(day, -30, CURRENT_DATE) THEN LCR_RATIO END)
+
+relationships:
+  - name: transactions_to_accounts
+    left_table: transactions
+    right_table: accounts
+    relationship_columns:
+      - left_column: ACCOUNT_ID
+        right_column: ACCOUNT_ID
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: accounts_to_customers
+    left_table: accounts
+    right_table: customers
+    relationship_columns:
+      - left_column: CUSTOMER_ID
+        right_column: CUSTOMER_ID
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: credit_exposures_to_customers
+    left_table: credit_exposures
+    right_table: customers
+    relationship_columns:
+      - left_column: CUSTOMER_ID
+        right_column: CUSTOMER_ID
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: risk_flags_to_accounts
+    left_table: risk_flags
+    right_table: accounts
+    relationship_columns:
+      - left_column: ACCOUNT_ID
+        right_column: ACCOUNT_ID
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: risk_flags_to_customers
+    left_table: risk_flags
+    right_table: customers
+    relationship_columns:
+      - left_column: CUSTOMER_ID
+        right_column: CUSTOMER_ID
+    join_type: left_outer
+    relationship_type: many_to_one
+
+verified_queries:
+  - name: fraud_flags_this_week
+    question: Which accounts show fraud-risk patterns this week?
+    sql: |
+      SELECT
+        t.account_id,
+        a.account_type,
+        c.segment,
+        COUNT(*) AS flagged_txn_count,
+        SUM(t.amount) AS total_flagged_amount,
+        MAX(t.flag_score) AS max_flag_score,
+        ARRAY_AGG(DISTINCT t.fraud_pattern) AS patterns
+      FROM CITADEL_DB.RISK.TRANSACTIONS t
+      JOIN CITADEL_DB.RISK.ACCOUNTS a ON a.account_id = t.account_id
+      JOIN CITADEL_DB.RISK.CUSTOMERS c ON c.customer_id = a.customer_id
+      WHERE t.is_flagged = TRUE
+        AND t.txn_ts >= DATEADD(day, -7, CURRENT_TIMESTAMP())
+      GROUP BY t.account_id, a.account_type, c.segment
+      ORDER BY max_flag_score DESC
+      LIMIT 20
+
+  - name: lcr_trend_30_days
+    question: What is the LCR trend over the last 30 days?
+    sql: |
+      SELECT
+        position_date,
+        ROUND(AVG(lcr_ratio) * 100, 1) AS avg_lcr_pct,
+        MAX(CASE WHEN lcr_breach THEN 1 ELSE 0 END) AS had_breach
+      FROM CITADEL_DB.RISK.LIQUIDITY_POSITIONS
+      WHERE position_date >= DATEADD(day, -30, CURRENT_DATE)
+        AND tenor_bucket = '0_7D'
+      GROUP BY position_date
+      ORDER BY position_date
+
+  - name: credit_watch_list_by_sector
+    question: Show me the credit watch-list broken down by sector
+    sql: |
+      SELECT
+        e.sector,
+        COUNT(*) AS watch_list_count,
+        ROUND(SUM(e.outstanding) / 1e6, 2) AS outstanding_millions,
+        ROUND(SUM(e.rwa) / 1e6, 2) AS rwa_millions,
+        ROUND(AVG(e.pd_score) * 100, 2) AS avg_pd_pct,
+        ROUND(SUM(e.expected_loss) / 1e6, 4) AS ecl_millions
+      FROM CITADEL_DB.RISK.CREDIT_EXPOSURES e
+      WHERE e.watch_list_flag = TRUE
+      GROUP BY e.sector
+      ORDER BY outstanding_millions DESC
+
+  - name: high_risk_customers_with_fraud_flags
+    question: Which high-risk customers have open fraud flags this week?
+    sql: |
+      SELECT
+        c.customer_id,
+        c.segment,
+        c.risk_rating,
+        c.pep_flag,
+        c.sanction_flag,
+        COUNT(DISTINCT t.txn_id) AS flagged_txn_count,
+        MAX(t.flag_score) AS max_fraud_score,
+        ARRAY_AGG(DISTINCT t.fraud_pattern) AS fraud_patterns
+      FROM CITADEL_DB.RISK.CUSTOMERS c
+      JOIN CITADEL_DB.RISK.ACCOUNTS a ON a.customer_id = c.customer_id
+      JOIN CITADEL_DB.RISK.TRANSACTIONS t ON t.account_id = a.account_id
+      WHERE c.risk_rating = 'HIGH'
+        AND t.is_flagged = TRUE
+        AND t.txn_ts >= DATEADD(day, -7, CURRENT_TIMESTAMP())
+      GROUP BY c.customer_id, c.segment, c.risk_rating, c.pep_flag, c.sanction_flag
+      ORDER BY max_fraud_score DESC
+      LIMIT 20
+
+  - name: open_risk_flags_summary
+    question: Give me a summary of open risk flags by domain and severity
+    sql: |
+      SELECT
+        flag_domain,
+        severity,
+        flag_type,
+        COUNT(*) AS flag_count,
+        ROUND(AVG(flag_score), 1) AS avg_score
+      FROM CITADEL_DB.RISK.RISK_FLAGS
+      WHERE flag_status = 'OPEN'
+      GROUP BY flag_domain, severity, flag_type
+      ORDER BY
+        CASE severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 ELSE 4 END,
+        flag_count DESC
+
+  - name: structuring_pattern_detail
+    question: Show me structuring transactions and the customers behind them
+    sql: |
+      SELECT
+        t.txn_id,
+        t.account_id,
+        c.customer_id,
+        c.segment,
+        c.pep_flag,
+        t.amount,
+        t.channel,
+        t.txn_ts,
+        t.flag_score,
+        t.country_code
+      FROM CITADEL_DB.RISK.TRANSACTIONS t
+      JOIN CITADEL_DB.RISK.ACCOUNTS a ON a.account_id = t.account_id
+      JOIN CITADEL_DB.RISK.CUSTOMERS c ON c.customer_id = a.customer_id
+      WHERE t.fraud_pattern = 'STRUCTURING'
+      ORDER BY t.txn_ts DESC
+      LIMIT 50
+
+  - name: total_rwa_by_sector_and_rating
+    question: What is the total RWA exposure by sector and internal rating?
+    sql: |
+      SELECT
+        sector,
+        internal_rating,
+        COUNT(*) AS facility_count,
+        ROUND(SUM(outstanding) / 1e6, 2) AS outstanding_millions,
+        ROUND(SUM(rwa) / 1e6, 2) AS rwa_millions,
+        ROUND(AVG(pd_score) * 100, 2) AS avg_pd_pct
+      FROM CITADEL_DB.RISK.CREDIT_EXPOSURES
+      GROUP BY sector, internal_rating
+      ORDER BY rwa_millions DESC
+      LIMIT 30
+
+  - name: liquidity_breach_detail
+    question: Show me the days where LCR was below 100 percent with details
+    sql: |
+      SELECT
+        position_date,
+        tenor_bucket,
+        ROUND(lcr_ratio * 100, 1) AS lcr_pct,
+        ROUND(lcr_numerator / 1e6, 1) AS hqla_millions,
+        ROUND(lcr_denominator / 1e6, 1) AS net_outflow_millions,
+        nsfr_breach
+      FROM CITADEL_DB.RISK.LIQUIDITY_POSITIONS
+      WHERE lcr_breach = TRUE
+      ORDER BY position_date DESC, lcr_ratio ASC
+      LIMIT 50
+
+custom_instructions: >
+  When answering fraud questions, always include the fraud_pattern dimension and flag_score
+  to explain the signal, and cite the regulatory basis from threshold_rationale when available.
+
+  When answering credit risk questions, always note that PD > 0.15 is the watch-list threshold
+  (Basel III ICAAP internal calibration equivalent to BB-/B+ or below).
+
+  When answering liquidity questions, always include the lcr_ratio value and note that < 1.0
+  (below 100%) is a Basel III Art. 412 breach requiring supervisory notification.
+
+  For AML queries, always check whether the customer is a PEP (Politically Exposed Person),
+  as PEP status triggers FATF Recommendation 12 enhanced due diligence requirements.
+
+  Flag score interpretation for all domains: 0-40 = low risk, 41-65 = medium risk,
+  66-100 = high risk (internal calibration).
+
+  When citing regulations, use these standard references:
+  - LCR minimum: Basel III Art. 412 / BCBS January 2013
+  - NSFR minimum: Basel III Art. 428b
+  - Structuring: 31 CFR 1010.314 (BSA/FinCEN) and PMLA Schedule Rule 3(B)
+  - Cross-border: FATF Recommendation 19
+  - PEP: FATF Recommendation 12
+  - NPA classification: RBI Master Circular on IRAC 2023
+  - Credit watch-list: Basel III ICAAP internal threshold (PD > 0.15)

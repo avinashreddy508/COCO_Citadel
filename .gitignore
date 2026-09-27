@@ -1,0 +1,15 @@
+# Secrets / tokens - never commit
+scripts/.mcp_tokens.json
+*.token
+*.pem
+*.p8
+.env
+
+# Python
+__pycache__/
+*.pyc
+.mcp_tokens.json
+
+# OS / editor
+.DS_Store
+Thumbs.db

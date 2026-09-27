@@ -1,0 +1,6 @@
+# Citadel project Python dependencies
+# Install with: pip install -r requirements.txt
+
+snowflake-connector-python>=3.6.0
+requests>=2.31.0
+sseclient-py>=1.8.0          # for streaming SSE in chat.py (optional)

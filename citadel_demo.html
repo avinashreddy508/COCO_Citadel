@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="snowflake-source" content="cortex-agent-authored"/>
+  <title>CITADEL — Demo Presentation</title>
+  <script type="application/json" id="snowflake-report-metadata">
+  {
+    "generated": "2026-09-06",
+    "intent": "CITADEL hackathon demo presentation — interactive slide deck",
+    "sections": [
+      { "id": "slide-1", "title": "Title" },
+      { "id": "slide-2", "title": "The Problem" },
+      { "id": "slide-3", "title": "Solution Architecture" },
+      { "id": "slide-4", "title": "Data Foundation" },
+      { "id": "slide-5", "title": "Intelligence Layer" },
+      { "id": "slide-6", "title": "CITADEL Agent" },
+      { "id": "slide-7", "title": "Signal to Finding Pipeline" },
+      { "id": "slide-8", "title": "Streamlit App" },
+      { "id": "slide-9", "title": "MCP + CoCo Integration" },
+      { "id": "slide-10", "title": "Regulatory Coverage" },
+      { "id": "slide-11", "title": "Hackathon Feature Matrix" },
+      { "id": "slide-12", "title": "Live Demo Walkthrough" }
+    ]
+  }
+  </script>
+  <script src="/libs/chart.js@4.4.4/chart.umd.js"></script>
+  <style>
+    :root {
+      --sf-blue: #11567F;
+      --sf-sky: #1B9BCB;
+      --sf-ice: #29B5E8;
+      --sf-dark: #0B1E2D;
+      --sf-darker: #071422;
+      --sf-card: rgba(255,255,255,0.06);
+      --sf-border: rgba(41,181,232,0.25);
+      --accent-red: #E53E3E;
+      --accent-amber: #D69E2E;
+      --accent-green: #38A169;
+      --accent-purple: #805AD5;
+      color-scheme: dark;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; background: var(--sf-darker); color: #E8F4F8; font-family: -apple-system, 'Segoe UI', system-ui, sans-serif; }
+
+    /* ── Slide container ── */
+    #deck { width: 100vw; height: 100vh; position: relative; }
+    .slide {
+      position: absolute; inset: 0;
+      display: none; flex-direction: column; justify-content: center; align-items: center;
+      padding: clamp(20px, 4vw, 60px);
+      opacity: 0; transition: opacity 0.35s ease;
+    }
+    .slide.active { display: flex; opacity: 1; }
+
+    /* ── Navigation ── */
+    #nav {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      display: flex; align-items: center; gap: 14px; z-index: 100;
+      background: rgba(11,30,45,0.85); backdrop-filter: blur(8px);
+      border: 1px solid var(--sf-border); border-radius: 32px; padding: 10px 20px;
+    }
+    .nav-btn {
+      background: var(--sf-card); border: 1px solid var(--sf-border); color: var(--sf-ice);
+      width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 1rem;
+      display: flex; align-items: center; justify-content: center; transition: background 0.2s;
+    }
+    .nav-btn:hover { background: rgba(41,181,232,0.2); }
+    #slide-counter { font-size: 0.82rem; color: #7BB3CA; min-width: 60px; text-align: center; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(41,181,232,0.3); cursor: pointer; transition: background 0.2s; }
+    .dot.active { background: var(--sf-ice); }
+
+    /* ── Progress bar ── */
+    #progress { position: fixed; top: 0; left: 0; height: 3px; background: linear-gradient(90deg,var(--sf-ice),var(--sf-sky)); transition: width 0.35s; z-index: 200; }
+
+    /* ── Keyboard hint ── */
+    #hint { position: fixed; top: 16px; right: 20px; font-size: 0.72rem; color: rgba(120,180,210,0.5); z-index: 100; }
+
+    /* ── Slide 1 — Title ── */
+    .title-slide { background: radial-gradient(ellipse at 30% 40%, rgba(17,86,127,0.55) 0%, var(--sf-darker) 65%); }
+    .citadel-badge {
+      font-size: clamp(3rem, 8vw, 6rem); font-weight: 900; letter-spacing: -2px;
+      background: linear-gradient(135deg, #fff 0%, var(--sf-ice) 50%, var(--sf-sky) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      line-height: 1;
+    }
+    .subtitle { font-size: clamp(0.9rem, 2.2vw, 1.2rem); color: #7FC8E5; margin-top: 12px; letter-spacing: 0.5px; }
+    .tag-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; justify-content: center; }
+    .tag { background: rgba(41,181,232,0.12); border: 1px solid rgba(41,181,232,0.3); color: var(--sf-ice); padding: 5px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 500; }
+    .author-row { margin-top: 32px; font-size: 0.82rem; color: rgba(120,180,210,0.6); }
+    .castle { font-size: clamp(2.5rem, 6vw, 4.5rem); margin-bottom: 12px; }
+
+    /* ── Section header ── */
+    .slide-header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; width: 100%; max-width: 1000px; }
+    .slide-num { font-size: 0.75rem; font-weight: 700; color: var(--sf-ice); background: rgba(41,181,232,0.15); border: 1px solid var(--sf-border); padding: 3px 10px; border-radius: 12px; white-space: nowrap; }
+    .slide-title { font-size: clamp(1.3rem, 3.5vw, 2rem); font-weight: 700; color: #fff; }
+    .slide-rule { flex: 1; height: 1px; background: linear-gradient(90deg, var(--sf-border), transparent); }
+
+    /* ── Cards ── */
+    .cards { display: grid; gap: 14px; width: 100%; max-width: 1000px; }
+    .cards-2 { grid-template-columns: repeat(2, 1fr); }
+    .cards-3 { grid-template-columns: repeat(3, 1fr); }
+    .cards-4 { grid-template-columns: repeat(4, 1fr); }
+    .card {
+      background: var(--sf-card); border: 1px solid var(--sf-border); border-radius: 12px;
+      padding: clamp(14px, 2vw, 20px);
+    }
+    .card-icon { font-size: 1.6rem; margin-bottom: 8px; }
+    .card-title { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--sf-ice); margin-bottom: 6px; }
+    .card-body { font-size: 0.87rem; color: #B0D4E5; line-height: 1.55; }
+    .kpi-val { font-size: clamp(1.5rem, 3.5vw, 2.4rem); font-weight: 800; color: #fff; }
+    .kpi-sub { font-size: 0.78rem; color: #7BB3CA; margin-top: 2px; }
+    .kpi-val.red { color: var(--accent-red); }
+    .kpi-val.amber { color: var(--accent-amber); }
+    .kpi-val.green { color: var(--accent-green); }
+    .kpi-val.ice { color: var(--sf-ice); }
+
+    /* ── Arch diagram ── */
+    .arch { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; width: 100%; max-width: 1000px; align-items: center; }
+    .arch-box { background: var(--sf-card); border: 1px solid var(--sf-border); border-radius: 10px; padding: 12px 10px; text-align: center; }
+    .arch-arrow { text-align: center; color: var(--sf-ice); font-size: 1.2rem; }
+    .arch-label { font-size: 0.73rem; font-weight: 700; color: var(--sf-ice); text-transform: uppercase; letter-spacing: 0.5px; }
+    .arch-sub { font-size: 0.68rem; color: #7BB3CA; margin-top: 4px; }
+    .arch-icon { font-size: 1.4rem; margin-bottom: 6px; }
+
+    /* ── Pipeline chain ── */
+    .pipeline { display: flex; align-items: stretch; gap: 0; width: 100%; max-width: 1000px; }
+    .pipe-step {
+      flex: 1; background: var(--sf-card); border: 1px solid var(--sf-border); border-radius: 10px;
+      padding: 14px 10px; text-align: center; position: relative;
+    }
+    .pipe-step::after {
+      content: '→'; position: absolute; right: -14px; top: 50%; transform: translateY(-50%);
+      font-size: 1.1rem; color: var(--sf-ice); z-index: 1; width: 14px; text-align: center;
+    }
+    .pipe-step:last-child::after { display: none; }
+    .pipe-num { font-size: 0.65rem; font-weight: 700; color: var(--sf-ice); background: rgba(41,181,232,0.15); border-radius: 8px; padding: 2px 6px; display: inline-block; margin-bottom: 6px; }
+    .pipe-icon { font-size: 1.5rem; }
+    .pipe-label { font-size: 0.72rem; font-weight: 700; color: #fff; margin-top: 4px; }
+    .pipe-detail { font-size: 0.65rem; color: #7BB3CA; margin-top: 3px; line-height: 1.4; }
+
+    /* ── Code block ── */
+    .code-block {
+      background: rgba(0,0,0,0.4); border: 1px solid var(--sf-border); border-radius: 8px;
+      padding: 14px 16px; font-family: 'Consolas', 'SF Mono', monospace; font-size: 0.77rem;
+      color: #B0D4E5; white-space: pre; overflow-x: auto; width: 100%; max-width: 1000px;
+      line-height: 1.6;
+    }
+    .code-block .kw { color: var(--sf-ice); font-weight: 600; }
+    .code-block .str { color: #90EE90; }
+    .code-block .cmt { color: #556878; font-style: italic; }
+    .code-block .fn  { color: #FFD700; }
+    .code-block .num { color: #FFA07A; }
+    .code-block .hl  { background: rgba(41,181,232,0.15); border-radius: 2px; padding: 1px 3px; }
+
+    /* ── Table ── */
+    .demo-table { width: 100%; max-width: 1000px; border-collapse: collapse; font-size: 0.8rem; }
+    .demo-table th { background: rgba(17,86,127,0.5); color: var(--sf-ice); padding: 8px 12px; text-align: left; font-weight: 600; border-bottom: 1px solid var(--sf-border); }
+    .demo-table td { padding: 8px 12px; border-bottom: 1px solid rgba(41,181,232,0.1); color: #B0D4E5; }
+    .demo-table tr:hover td { background: rgba(41,181,232,0.05); }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 700; }
+    .badge-crit { background: rgba(229,62,62,0.2); color: #FC8181; border: 1px solid rgba(229,62,62,0.3); }
+    .badge-high { background: rgba(237,137,54,0.2); color: #FBD38D; border: 1px solid rgba(237,137,54,0.3); }
+    .badge-med  { background: rgba(214,158,46,0.2); color: #FAF089; border: 1px solid rgba(214,158,46,0.3); }
+    .badge-ok   { background: rgba(56,161,105,0.2); color: #9AE6B4; border: 1px solid rgba(56,161,105,0.3); }
+    .badge-blue { background: rgba(41,181,232,0.15); color: var(--sf-ice); border: 1px solid var(--sf-border); }
+
+    /* ── Feature matrix ── */
+    .feature-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 8px; margin-bottom: 4px; }
+    .feature-row:nth-child(odd) { background: rgba(255,255,255,0.03); }
+    .feature-check { font-size: 1rem; min-width: 22px; }
+    .feature-name { flex: 2; font-size: 0.83rem; color: #E2EFF7; font-weight: 500; }
+    .feature-detail { flex: 3; font-size: 0.76rem; color: #7BB3CA; }
+    .feature-tag { font-size: 0.65rem; padding: 2px 8px; border-radius: 8px; font-weight: 700; white-space: nowrap; }
+    .tag-core { background: rgba(41,181,232,0.2); color: var(--sf-ice); }
+    .tag-stretch { background: rgba(128,90,213,0.25); color: #B794F4; }
+    .tag-lastmile { background: rgba(56,161,105,0.2); color: #9AE6B4; }
+
+    /* ── Reg coverage ── */
+    .reg-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; width: 100%; max-width: 1000px; }
+    .reg-card { background: var(--sf-card); border: 1px solid var(--sf-border); border-radius: 10px; padding: 14px 16px; }
+    .reg-name { font-size: 0.8rem; font-weight: 700; color: var(--sf-ice); margin-bottom: 4px; }
+    .reg-articles { font-size: 0.7rem; color: #B0D4E5; line-height: 1.5; }
+
+    /* ── Demo walkthrough ── */
+    .demo-step { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 10px; }
+    .demo-step-num { min-width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg,var(--sf-sky),var(--sf-ice)); display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; color: var(--sf-darker); flex-shrink: 0; }
+    .demo-step-content { flex: 1; }
+    .demo-step-title { font-size: 0.85rem; font-weight: 600; color: #fff; }
+    .demo-step-detail { font-size: 0.77rem; color: #7BB3CA; margin-top: 2px; line-height: 1.4; }
+    .demo-step-cmd { font-family: 'Consolas','SF Mono',monospace; font-size: 0.73rem; background: rgba(0,0,0,0.3); border: 1px solid rgba(41,181,232,0.2); border-radius: 5px; padding: 4px 8px; margin-top: 4px; color: #90EE90; display: inline-block; }
+
+    /* ── Charts ── */
+    .chart-box { position: relative; width: 100%; }
+    .chart-box > canvas { width: 100% !important; height: 100% !important; }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .cards-3, .cards-4 { grid-template-columns: repeat(2, 1fr); }
+      .arch { grid-template-columns: 1fr; }
+      .arch-arrow { display: none; }
+      .pipeline { flex-direction: column; }
+      .pipe-step::after { content: '↓'; right: auto; bottom: -14px; top: auto; left: 50%; transform: translateX(-50%); }
+      .reg-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) {
+      .cards-2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div id="hint">← → arrow keys to navigate</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 1 — TITLE                                                -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="deck">
+<div class="slide title-slide active" id="slide-1">
+  <div class="castle">🏰</div>
+  <div class="citadel-badge">CITADEL</div>
+  <div class="subtitle">Risk, Fraud &amp; Regulatory Intelligence Copilot</div>
+  <div class="tag-row">
+    <span class="tag">🏦 Banking &amp; NBFC</span>
+    <span class="tag">⚡ Real-time Fraud Detection</span>
+    <span class="tag">📋 Basel III · FATF · FinCEN · RBI</span>
+    <span class="tag">🤖 AI-powered SAR Narratives</span>
+    <span class="tag">❄️ Snowflake CoCo CLI Hackathon 2026</span>
+  </div>
+  <div class="author-row">Avinash L (avinashreddy508) &nbsp;·&nbsp; Account JSTEYZM-MP60447 &nbsp;·&nbsp; September 2026</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 2 — THE PROBLEM                                          -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-2">
+  <div class="slide-header">
+    <span class="slide-num">01 / 12</span>
+    <span class="slide-title">The Problem</span>
+    <div class="slide-rule"></div>
+  </div>
+  <div class="cards cards-2" style="max-width:1000px;margin-bottom:16px;">
+    <div class="card">
+      <div class="card-icon">🔥</div>
+      <div class="card-title">Fragmented Risk Signals</div>
+      <div class="card-body">Fraud, credit, and liquidity risks live in separate systems. No single view across domains. Compliance officers waste hours correlating spreadsheets before filing a SAR.</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">⏱️</div>
+      <div class="card-title">Regulatory Filing Delays</div>
+      <div class="card-body">FinCEN mandates SAR filing within 30 days. Basel III LCR breaches require supervisory notification within 2 business days. Manual workflows miss these windows.</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🕳️</div>
+      <div class="card-title">No Audit Traceability</div>
+      <div class="card-body">BCBS 239 Principle 2 requires full data lineage and traceability for every risk finding. Most banks have no immutable action log linking signals to outcomes.</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">📚</div>
+      <div class="card-title">Regulation Overload</div>
+      <div class="card-body">Basel III, FATF R.12/16/19, FinCEN BSA/SAR, RBI IRAC 2023 — compliance officers can't recall which rule applies to which pattern without expert lookup.</div>
+    </div>
+  </div>
+  <div style="max-width:1000px;width:100%;background:rgba(229,62,62,0.08);border:1px solid rgba(229,62,62,0.25);border-radius:10px;padding:14px 18px;font-size:0.85rem;color:#FEB2B2;">
+    <strong>The Gap:</strong> Banks need a single AI copilot that detects signals, cites the regulation, lets the compliance officer take action with one click, and writes the regulatory narrative automatically — all inside Snowflake.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 3 — ARCHITECTURE                                         -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-3">
+  <div class="slide-header">
+    <span class="slide-num">02 / 12</span>
+    <span class="slide-title">Solution Architecture</span>
+    <div class="slide-rule"></div>
+  </div>
+  <div class="arch" style="max-width:1000px;width:100%;">
+    <div class="arch-box">
+      <div class="arch-icon">🗄️</div>
+      <div class="arch-label">Data Layer</div>
+      <div class="arch-sub">8 tables · 52K+ rows<br/>5-role RBAC<br/>PII masking</div>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-box">
+      <div class="arch-icon">🧠</div>
+      <div class="arch-label">Intelligence</div>
+      <div class="arch-sub">Semantic View<br/>Cortex Search<br/>10 policy docs</div>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-box" style="border-color:rgba(41,181,232,0.6);background:rgba(41,181,232,0.1);">
+      <div class="arch-icon">🤖</div>
+      <div class="arch-label" style="color:#fff;">CITADEL Agent</div>
+      <div class="arch-sub">Analyst + Search<br/>+ MCP tools</div>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-box">
+      <div class="arch-icon">🖥️</div>
+      <div class="arch-label">Interfaces</div>
+      <div class="arch-sub">Streamlit App<br/>MCP Servers<br/>CoCo Extension</div>
+    </div>
+  </div>
+  <div class="cards cards-3" style="max-width:1000px;margin-top:18px;">
+    <div class="card">
+      <div class="card-title">Phase 1 — Foundation</div>
+      <div class="card-body">CITADEL_DB.RISK schema · 8 tables · 52K rows synthetic data · 5-role RBAC · Column masking + Row access policies · BCBS 239 evidence_payload VARIANT</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Phase 2 — Intelligence</div>
+      <div class="card-body">RISK_FLAGS unified signal queue · Cortex Analyst semantic view (18 metrics, 30+ filters, 8 VQRs) · Cortex Search over 10 regulatory PDFs · Basel III, FATF, FinCEN coverage</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Phase 3–4 + Stretch</div>
+      <div class="card-body">CITADEL_AGENT with 2 tools · Streamlit 3-tab app · Action stored procs (SAR, Freeze, Escalate) · 2 MCP servers + OAuth · CoCo Extension registry</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 4 — DATA FOUNDATION                                      -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-4">
+  <div class="slide-header">
+    <span class="slide-num">03 / 12</span>
+    <span class="slide-title">Data Foundation — Phase 1</span>
+    <div class="slide-rule"></div>
+  </div>
+  <div class="cards cards-4" style="max-width:1000px;margin-bottom:14px;">
+    <div class="card" style="text-align:center;">
+      <div class="kpi-val ice">50K</div>
+      <div class="kpi-sub">Transactions</div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="kpi-val ice">9,318</div>
+      <div class="kpi-sub">Risk Flags</div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="kpi-val ice">800</div>
+      <div class="kpi-sub">Accounts</div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="kpi-val ice">500</div>
+      <div class="kpi-sub">Customers</div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;width:100%;max-width:1000px;">
+    <div>
+      <div class="card-title" style="margin-bottom:10px;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--sf-ice);">8 Core Tables</div>
+      <table class="demo-table" style="font-size:0.75rem;">
+        <thead><tr><th>Table</th><th>Rows</th><th>Domain</th></tr></thead>
+        <tbody>
+          <tr><td>CUSTOMERS</td><td>500</td><td><span class="badge badge-blue">IDENTITY</span></td></tr>
+          <tr><td>ACCOUNTS</td><td>800</td><td><span class="badge badge-blue">BANKING</span></td></tr>
+          <tr><td>TRANSACTIONS</td><td>50,000</td><td><span class="badge badge-crit">FRAUD</span></td></tr>
+          <tr><td>RISK_FLAGS</td><td>9,318</td><td><span class="badge badge-crit">SIGNAL</span></td></tr>
+          <tr><td>CREDIT_EXPOSURES</td><td>300</td><td><span class="badge badge-high">CREDIT</span></td></tr>
+          <tr><td>LIQUIDITY_POSITIONS</td><td>450</td><td><span class="badge badge-med">LIQUIDITY</span></td></tr>
+          <tr><td>REGULATORY_FILINGS</td><td>203+</td><td><span class="badge badge-ok">COMPLIANCE</span></td></tr>
+          <tr><td>AUDIT_LOG</td><td>58+</td><td><span class="badge badge-ok">GOVERNANCE</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <div class="card-title" style="margin-bottom:10px;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--sf-ice);">Security Architecture</div>
+      <div class="cards" style="grid-template-columns:1fr;">
+        <div class="card" style="padding:10px 12px;">
+          <div class="card-title" style="font-size:0.7rem;">5-Role RBAC Hierarchy</div>
+          <div class="card-body" style="font-size:0.73rem;">CITADEL_ADMIN → COMPLIANCE_OFFICER → RISK_MANAGER → RISK_ANALYST · CITADEL_AUDITOR (read-only incl. AUDIT_LOG)</div>
+        </div>
+        <div class="card" style="padding:10px 12px;">
+          <div class="card-title" style="font-size:0.7rem;">PII Column Masking Policies</div>
+          <div class="card-body" style="font-size:0.73rem;">national_id, full_name, account_number masked for RISK_ANALYST and below · full access for COMPLIANCE_OFFICER+</div>
+        </div>
+        <div class="card" style="padding:10px 12px;">
+          <div class="card-title" style="font-size:0.7rem;">Row Access Policy</div>
+          <div class="card-body" style="font-size:0.73rem;">RISK_ANALYST sees only their assigned customer segment · BCBS 239 evidence_payload VARIANT on every flag</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 5 — INTELLIGENCE LAYER                                   -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-5">
+  <div class="slide-header">
+    <span class="slide-num">04 / 12</span>
+    <span class="slide-title">Intelligence Layer — Phase 2</span>
+    <div class="slide-rule"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px;width:100%;max-width:1000px;">
+    <div>
+      <div class="card-title" style="margin-bottom:10px;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--sf-ice);">Cortex Analyst — Semantic View</div>
+      <div class="card" style="padding:12px 14px;margin-bottom:10px;">
+        <div class="card-body" style="font-size:0.78rem;"><strong style="color:#fff;">CITADEL_RISK_INTELLIGENCE</strong><br/>6 tables · 5 join relationships · 18+ metrics · 30+ named filters · 8 verified queries</div>
+      </div>
+      <table class="demo-table" style="font-size:0.72rem;">
+        <thead><tr><th>Metric</th><th>Regulation</th></tr></thead>
+        <tbody>
+          <tr><td>open_fraud_flag_count</td><td>FinCEN SAR §1020.320</td></tr>
+          <tr><td>critical_flag_count</td><td>FATF R.19 EDD</td></tr>
+          <tr><td>avg_lcr_ratio</td><td>Basel III Art. 412</td></tr>
+          <tr><td>lcr_breach_days</td><td>Basel III Art. 412(e)</td></tr>
+          <tr><td>pd_watch_list_count</td><td>Basel III ICAAP PD&gt;0.15</td></tr>
+          <tr><td>total_rwa_watch_list</td><td>BCBS 239 Principle 2</td></tr>
+          <tr><td>sar_draft_count</td><td>31 CFR §1010.314</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <div class="card-title" style="margin-bottom:10px;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--sf-ice);">Cortex Search — Policy RAG</div>
+      <div class="card" style="padding:12px 14px;margin-bottom:10px;">
+        <div class="card-body" style="font-size:0.78rem;"><strong style="color:#fff;">CITADEL_SEARCH_SVC</strong> — ACTIVE<br/>10 regulatory policy documents indexed · Natural language search over 200+ pages of compliance rules</div>
+      </div>
+      <div class="cards" style="grid-template-columns:1fr;">
+        <div class="card" style="padding:8px 12px;"><div class="card-body" style="font-size:0.72rem;">📄 Basel III LCR/NSFR Policy (Art. 412, 428b)</div></div>
+        <div class="card" style="padding:8px 12px;"><div class="card-body" style="font-size:0.72px;">📄 FATF Recommendations 12, 16, 19 (Beneficiary/PEP/Jurisdiction)</div></div>
+        <div class="card" style="padding:8px 12px;"><div class="card-body" style="font-size:0.72px;">📄 FinCEN BSA — SAR Filing (31 CFR §1020.320)</div></div>
+        <div class="card" style="padding:8px 12px;"><div class="card-body" style="font-size:0.72px;">📄 RBI IRAC 2023 — NPA Classification Norms</div></div>
+        <div class="card" style="padding:8px 12px;"><div class="card-body" style="font-size:0.72px;">📄 PMLA 2002 + 6 more regulatory sources</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 6 — CITADEL AGENT                                        -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-6">
+  <div class="slide-header">
+    <span class="slide-num">05 / 12</span>
+    <span class="slide-title">CITADEL Agent — Phase 3</span>
+    <div class="slide-rule"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px;width:100%;max-width:1000px;">
+    <div>
+      <div class="card" style="margin-bottom:12px;">
+        <div class="card-title">CITADEL_AGENT</div>
+        <div class="card-body" style="font-size:0.8rem;">Model: <strong>claude-sonnet-4-6</strong><br/>2 tools: <strong>RiskSignalAnalytics</strong> (Cortex Analyst text-to-SQL) + <strong>RegulatoryKnowledgeSearch</strong> (Cortex Search RAG)<br/>MCP servers block for action tools</div>
+      </div>
+      <div class="card-title" style="margin-bottom:8px;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--sf-ice);">8 Demo Questions</div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <div class="card" style="padding:7px 11px;"><div class="card-body" style="font-size:0.74rem;">Which accounts show fraud-risk patterns this week? Include the regulatory basis.</div></div>
+        <div class="card" style="padding:7px 11px;"><div class="card-body" style="font-size:0.74rem;">Show structuring transactions. Are any customers PEPs?</div></div>
+        <div class="card" style="padding:7px 11px;"><div class="card-body" style="font-size:0.74rem;">What is the LCR trend and what does Basel III require on a breach?</div></div>
+        <div class="card" style="padding:7px 11px;"><div class="card-body" style="font-size:0.74rem;">What accounts should I file a SAR for today?</div></div>
+        <div class="card" style="padding:7px 11px;"><div class="card-body" style="font-size:0.74rem;">Show the credit watch-list by sector with RWA and Expected Loss.</div></div>
+      </div>
+    </div>
+    <div>
+      <div class="card-title" style="margin-bottom:8px;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--sf-ice);">Agent Spec (key block)</div>
+      <div class="code-block" style="font-size:0.7rem;line-height:1.5;">
+<span class="kw">CREATE OR REPLACE</span> <span class="kw">AGENT</span>
+  CITADEL_DB.RISK.CITADEL_AGENT
+  MODEL = <span class="str">'claude-sonnet-4-6'</span>
+  TOOLS = (
+    {<span class="kw">type</span>: <span class="str">'cortex_analyst_text_to_sql'</span>,
+     <span class="kw">semantic_model</span>: <span class="str">'@.../semantic.yaml'</span>},
+    {<span class="kw">type</span>: <span class="str">'cortex_search'</span>,
+     <span class="kw">service</span>: <span class="str">'CITADEL_SEARCH_SVC'</span>,
+     <span class="kw">max_results</span>: <span class="num">5</span>}
+  )
+  TOOL_RESOURCES = (...)
+  <span class="kw">MCP_SERVERS</span> = (
+    CITADEL_ACTIONS_MCP_SERVER
+  )</div>
+      <div class="card" style="margin-top:10px;">
+        <div class="card-title" style="font-size:0.7rem;">Action Stored Procedures</div>
+        <div class="card-body" style="font-size:0.73rem;">
+          📄 <strong>FILE_SAR_DRAFT</strong> — AI narrative via Cortex.COMPLETE<br/>
+          🔒 <strong>FLAG_ACCOUNT</strong> — freeze account + create case<br/>
+          ⬆️ <strong>ESCALATE_CASE</strong> — route to compliance officer<br/>
+          All append immutable entries to AUDIT_LOG
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 7 — SIGNAL TO FINDING PIPELINE                          -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-7">
+  <div class="slide-header">
+    <span class="slide-num">06 / 12</span>
+    <span class="slide-title">Signal → Finding Pipeline (Live Demo Chain)</span>
+    <div class="slide-rule"></div>
+  </div>
+  <div class="pipeline" style="max-width:1000px;width:100%;margin-bottom:18px;gap:8px;">
+    <div class="pipe-step" style="border-color:rgba(229,62,62,0.4);background:rgba(229,62,62,0.08);">
+      <div class="pipe-num">STEP 1</div>
+      <div class="pipe-icon">🚨</div>
+      <div class="pipe-label">Signal Detected</div>
+      <div class="pipe-detail">RISK_FLAGS<br/>Flag #3182<br/>CROSS_BORDER<br/>Score 95 · CRITICAL</div>
+    </div>
+    <div class="pipe-step" style="border-color:rgba(237,137,54,0.4);background:rgba(237,137,54,0.08);">
+      <div class="pipe-num">STEP 2</div>
+      <div class="pipe-icon">📄</div>
+      <div class="pipe-label">AI SAR Drafted</div>
+      <div class="pipe-detail">FILE_SAR_DRAFT<br/>claude-sonnet-4-6<br/>Filing #203<br/>FinCEN format</div>
+    </div>
+    <div class="pipe-step" style="border-color:rgba(214,158,46,0.4);background:rgba(214,158,46,0.08);">
+      <div class="pipe-num">STEP 3</div>
+      <div class="pipe-icon">🔒</div>
+      <div class="pipe-label">Account Frozen</div>
+      <div class="pipe-detail">FLAG_ACCOUNT<br/>Account #326<br/>Status: FROZEN<br/>Case created</div>
+    </div>
+    <div class="pipe-step" style="border-color:rgba(128,90,213,0.4);background:rgba(128,90,213,0.08);">
+      <div class="pipe-num">STEP 4</div>
+      <div class="pipe-icon">⬆️</div>
+      <div class="pipe-label">Case Escalated</div>
+      <div class="pipe-detail">ESCALATE_CASE<br/>Case #52<br/>→ compliance.officer<br/>31 USC 5318(g)</div>
+    </div>
+    <div class="pipe-step" style="border-color:rgba(56,161,105,0.4);background:rgba(56,161,105,0.08);">
+      <div class="pipe-num">STEP 5</div>
+      <div class="pipe-icon">📋</div>
+      <div class="pipe-label">Audit Trail</div>
+      <div class="pipe-detail">AUDIT_LOG<br/>58 immutable entries<br/>BCBS 239 P.2<br/>No DELETE grant</div>
+    </div>
+  </div>
+  <div class="code-block" style="font-size:0.72rem;max-width:1000px;">
+<span class="cmt">-- Demo verification query — live result</span>
+<span class="kw">SELECT</span> <span class="str">'1_SIGNAL'</span> <span class="kw">AS</span> step, <span class="str">'CROSS_BORDER flag, score 95, FATF IRN'</span>            <span class="kw">AS</span> detail
+<span class="kw">UNION ALL SELECT</span> <span class="str">'2_SAR'</span>,    <span class="str">'AI-generated SAR narrative, filing_id=203, DRAFT'</span>
+<span class="kw">UNION ALL SELECT</span> <span class="str">'3_FREEZE'</span>, <span class="fn">Account 326 status</span>: <span class="hl">FROZEN</span>
+<span class="kw">UNION ALL SELECT</span> <span class="str">'4_CASE'</span>,   <span class="fn">Case 52 status</span>: <span class="hl">ESCALATED</span> → escalated to compliance officer
+<span class="kw">UNION ALL SELECT</span> <span class="str">'5_AUDIT'</span>,  <span class="fn">Last 3 actions</span>: <span class="hl">FILE_SAR#203, FLAG_ACCOUNT#200, ESCALATE_CASE#52</span>
+</div>
+  <div style="margin-top:12px;background:rgba(56,161,105,0.1);border:1px solid rgba(56,161,105,0.3);border-radius:8px;padding:10px 14px;font-size:0.78rem;color:#9AE6B4;max-width:1000px;width:100%;">
+    ✅ <strong>End-to-end demo chain verified</strong> — all 5 steps tested and producing correct output. AI SAR narrative cites FinCEN SAR Field 35(a), 31 CFR §1020.320, FinCEN Advisory FIN-2023-A001.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 8 — STREAMLIT APP                                        -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-8">
+  <div class="slide-header">
+    <span class="slide-num">07 / 12</span>
+    <span class="slide-title">Streamlit App — Phase 4</span>
+    <div class="slide-rule"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px;width:100%;max-width:1000px;">
+    <div>
+      <div class="cards" style="grid-template-columns:1fr;gap:10px;margin-bottom:12px;">
+        <div class="card" style="border-color:rgba(41,181,232,0.5);">
+          <div class="card-title" style="font-size:0.72rem;">Tab 1 — 💬 Chat with CITADEL</div>
+          <div class="card-body" style="font-size:0.77rem;">Natural language Q&amp;A via CITADEL_AGENT · SSE streaming · Thread continuation · 8 pre-built demo questions · Session token auth (3 extraction paths + PAT fallback)</div>
+        </div>
+        <div class="card" style="border-color:rgba(41,181,232,0.5);">
+          <div class="card-title" style="font-size:0.72rem;">Tab 2 — 📊 Risk Dashboard</div>
+          <div class="card-body" style="font-size:0.77rem;">4 live KPI cards · Open flags table with domain/severity/score filters · Quick-action buttons (File SAR, Freeze Account, Escalate) for top CRITICAL flags · AI board report via Cortex.COMPLETE · CSV export</div>
+        </div>
+        <div class="card" style="border-color:rgba(56,161,105,0.4);">
+          <div class="card-title" style="font-size:0.72rem;">Tab 3 — 📋 Audit Trail</div>
+          <div class="card-body" style="font-size:0.77rem;">Searchable AUDIT_LOG viewer · 4 KPI tiles (SARs, Freezes, Escalations) · Filter by action type + summary search · CSV export for regulatory submissions · BCBS 239 traceability note</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card-title" style="margin-bottom:8px;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--sf-ice);">Live Metrics</div>
+      <div class="cards" style="grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+        <div class="card" style="text-align:center;padding:12px 8px;">
+          <div class="kpi-val red" style="font-size:1.6rem;">9,315</div>
+          <div class="kpi-sub" style="font-size:0.7rem;">Open Flags</div>
+        </div>
+        <div class="card" style="text-align:center;padding:12px 8px;">
+          <div class="kpi-val amber" style="font-size:1.6rem;">203</div>
+          <div class="kpi-sub" style="font-size:0.7rem;">SAR Drafts</div>
+        </div>
+        <div class="card" style="text-align:center;padding:12px 8px;">
+          <div class="kpi-val ice" style="font-size:1.6rem;">27</div>
+          <div class="kpi-sub" style="font-size:0.7rem;">Frozen Accts</div>
+        </div>
+        <div class="card" style="text-align:center;padding:12px 8px;">
+          <div class="kpi-val green" style="font-size:1.6rem;">58</div>
+          <div class="kpi-sub" style="font-size:0.7rem;">Audit Entries</div>
+        </div>
+      </div>
+      <div class="card" style="padding:10px 12px;">
+        <div class="card-title" style="font-size:0.7rem;">Deployment</div>
+        <div class="card-body" style="font-size:0.72rem;">
+          Warehouse: CITADEL_WH (XSMALL)<br/>
+          Stage: CITADEL_STAGE/app/<br/>
+          <code style="font-size:0.68rem;color:var(--sf-ice);">CITADEL_DB.RISK.CITADEL_APP</code><br/>
+          Snowsight → Projects → Streamlit
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 9 — MCP + CoCo                                           -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-9">
+  <div class="slide-header">
+    <span class="slide-num">08 / 12</span>
+    <span class="slide-title">MCP Servers + CoCo Extension — Stretch Goal</span>
+    <div class="slide-rule"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;width:100%;max-width:1000px;margin-bottom:14px;">
+    <div class="card">
+      <div class="card-icon">🔌</div>
+      <div class="card-title">CITADEL_AGENT_MCP_SERVER</div>
+      <div class="card-body" style="font-size:0.77rem;">Type: CORTEX_AGENT_RUN<br/>Auth: OAuth (CITADEL_MCP_READER_OAUTH)<br/>Tool: CITADEL_AGENT invocation from any MCP client</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">⚡</div>
+      <div class="card-title">CITADEL_ACTIONS_MCP_SERVER</div>
+      <div class="card-body" style="font-size:0.77rem;">Type: GENERIC (3 tools)<br/>FILE_SAR_DRAFT · FLAG_ACCOUNT · ESCALATE_CASE<br/>Auth: OAuth (CITADEL_MCP_ACTION_OAUTH)</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🧩</div>
+      <div class="card-title">CITADEL_RISK_COPILOT</div>
+      <div class="card-body" style="font-size:0.77rem;">Cortex Extension published to PUBLIC<br/>Registered in account extension catalog<br/>1 skill: citadel-mcp-connector / SKILL.md</div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;width:100%;max-width:1000px;">
+    <div>
+      <div class="card-title" style="margin-bottom:8px;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--sf-ice);">CoCo Workspace MCP Config</div>
+      <div class="code-block" style="font-size:0.69rem;line-height:1.5;">
+<span class="cmt">// .cortex/mcp.json</span>
+{
+  <span class="str">"mcpServers"</span>: {
+    <span class="str">"citadel-ai"</span>: {
+      <span class="str">"url"</span>: <span class="str">"https://jsteyzm-mp60447.snowflakecomputing.com
+        /api/v2/databases/CITADEL_DB/schemas/RISK
+        /mcp-servers/CITADEL_AGENT_MCP_SERVER"</span>,
+      <span class="str">"auth"</span>: {
+        <span class="str">"CLIENT_ID"</span>: <span class="str">"${env:CITADEL_READER_CLIENT_ID}"</span>,
+        <span class="str">"CLIENT_SECRET"</span>: <span class="str">"${env:CITADEL_READER_CLIENT_SECRET}"</span>
+      }
+    },
+    <span class="str">"citadel-actions"</span>: { <span class="cmt">/* action tools */</span> }
+  }
+}</div>
+    </div>
+    <div>
+      <div class="card-title" style="margin-bottom:8px;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--sf-ice);">OAuth Security Integrations</div>
+      <div class="cards" style="grid-template-columns:1fr;">
+        <div class="card" style="padding:10px 12px;">
+          <div class="card-title" style="font-size:0.7rem;">CITADEL_MCP_READER_OAUTH</div>
+          <div class="card-body" style="font-size:0.72rem;">READ-ONLY · CITADEL_MCP_READER_ROLE<br/>Grants: semantic view + search query</div>
+        </div>
+        <div class="card" style="padding:10px 12px;">
+          <div class="card-title" style="font-size:0.7rem;">CITADEL_MCP_ACTION_OAUTH</div>
+          <div class="card-body" style="font-size:0.72rem;">ACTION · CITADEL_MCP_ACTION_ROLE<br/>Grants: USAGE on 3 action procs</div>
+        </div>
+        <div class="card" style="padding:10px 12px;background:rgba(56,161,105,0.08);border-color:rgba(56,161,105,0.3);">
+          <div class="card-body" style="font-size:0.72rem;color:#9AE6B4;">✅ Both MCP servers deployed<br/>✅ OAuth integrations active<br/>✅ Extension published to PUBLIC</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 10 — REGULATORY COVERAGE                                 -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-10">
+  <div class="slide-header">
+    <span class="slide-num">09 / 12</span>
+    <span class="slide-title">Regulatory Coverage</span>
+    <div class="slide-rule"></div>
+  </div>
+  <div class="reg-grid">
+    <div class="reg-card">
+      <div class="reg-name">🏦 Basel III — Liquidity</div>
+      <div class="reg-articles">
+        <strong>Art. 412 (LCR)</strong> — Liquidity coverage ratio ≥100%; supervisory notification within 2 business days of breach<br/>
+        <strong>Art. 428b (NSFR)</strong> — Net stable funding ratio monitoring and reporting<br/>
+        Signal: <span class="badge badge-med">LIQUIDITY breach</span> → LCR chart in dashboard
+      </div>
+    </div>
+    <div class="reg-card">
+      <div class="reg-name">💳 Basel III — Credit / ICAAP</div>
+      <div class="reg-articles">
+        <strong>PD Watch-list (PD &gt; 0.15)</strong> — Internal Capital Adequacy Assessment (ICAAP) classification threshold<br/>
+        <strong>BCBS 239 Principle 2</strong> — Data lineage + traceability via evidence_payload VARIANT on every flag<br/>
+        Signal: <span class="badge badge-high">CREDIT watch-list</span> → RWA exposure dashboard
+      </div>
+    </div>
+    <div class="reg-card">
+      <div class="reg-name">🌐 FATF — AML/CFT</div>
+      <div class="reg-articles">
+        <strong>Recommendation 12</strong> — PEP identification and enhanced due diligence<br/>
+        <strong>Recommendation 16</strong> — Wire transfer beneficiary information<br/>
+        <strong>Recommendation 19</strong> — Higher-risk jurisdictions (grey/black-list) — wire restrictions, EDD<br/>
+        Signal: <span class="badge badge-crit">CROSS_BORDER</span> → SAR + account freeze
+      </div>
+    </div>
+    <div class="reg-card">
+      <div class="reg-name">🇺🇸 FinCEN BSA/AML</div>
+      <div class="reg-articles">
+        <strong>31 CFR §1010.314</strong> — Structuring: cash deposits $9,800–$9,999 to evade $10,000 CTR<br/>
+        <strong>31 CFR §1020.320</strong> — SAR filing obligations; 30-day window<br/>
+        <strong>FinCEN Advisory FIN-2023-A001</strong> — Digital payment channel exploitation<br/>
+        AI SAR narrative auto-cites these in FinCEN Field 35(a) format
+      </div>
+    </div>
+    <div class="reg-card">
+      <div class="reg-name">🇮🇳 RBI / PMLA</div>
+      <div class="reg-articles">
+        <strong>RBI IRAC 2023</strong> — NPA classification norms for Indian NBFCs and banks<br/>
+        <strong>RBI KYC Direction §38</strong> — Enhanced due diligence for high-risk customers<br/>
+        <strong>PMLA Schedule Rule 3(B)</b> — Indian AML threshold structuring rules<br/>
+        Signal: <span class="badge badge-high">STRUCTURING</span> → PMLA CTR evasion alert
+      </div>
+    </div>
+    <div class="reg-card" style="background:rgba(41,181,232,0.06);border-color:rgba(41,181,232,0.35);">
+      <div class="reg-name" style="color:#fff;">📊 CITADEL Coverage Summary</div>
+      <div class="reg-articles">
+        <strong>4 regulatory frameworks</strong> fully covered in semantic view metrics, search docs, and AI SAR narrative generation<br/>
+        <strong>10 policy documents</strong> indexed in Cortex Search<br/>
+        <strong>7 flag types</strong> mapped to specific articles<br/>
+        Every alert cites the <strong>exact regulation</strong> that applies
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 11 — FEATURE MATRIX                                      -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-11">
+  <div class="slide-header">
+    <span class="slide-num">10 / 12</span>
+    <span class="slide-title">Hackathon Feature Matrix</span>
+    <div class="slide-rule"></div>
+  </div>
+  <div style="width:100%;max-width:1000px;overflow-y:auto;max-height:calc(100vh - 200px);">
+    <div style="display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap;">
+      <span class="tag" style="background:rgba(41,181,232,0.15);">🔵 Core Phase</span>
+      <span class="tag" style="background:rgba(128,90,213,0.15);border-color:rgba(128,90,213,0.35);color:#B794F4;">🟣 Stretch Goal</span>
+      <span class="tag" style="background:rgba(56,161,105,0.15);border-color:rgba(56,161,105,0.35);color:#9AE6B4;">🟢 Last-Mile Fix</span>
+    </div>
+    <div class="feature-row"><div class="feature-check">✅</div><div class="feature-name">CITADEL_DB + 8 tables + 52K rows</div><div class="feature-detail">Synthetic banking data · fraud, credit, liquidity, compliance</div><span class="feature-tag tag-core">Phase 1</span></div>
+    <div class="feature-row"><div class="feature-check">✅</div><div class="feature-name">5-Role RBAC hierarchy</div><div class="feature-detail">ADMIN → COMPLIANCE_OFFICER → RISK_MANAGER → RISK_ANALYST · AUDITOR</div><span class="feature-tag tag-core">Phase 1</span></div>
+    <div class="feature-row"><div class="feature-check">✅</div><div class="feature-name">PII Column Masking Policies</div><div class="feature-detail">national_id, full_name, account_number · role-based unmasking</div><span class="feature-tag tag-core">Phase 1</span></div>
+    <div class="feature-row"><div class="feature-check">✅</div><div class="feature-name">Row Access Policy</div><div class="feature-detail">Segment-level visibility for RISK_ANALYST role</div><span class="feature-tag tag-core">Phase 1</span></div>
+    <div class="feature-row"><div class="feature-check">✅</div><div class="feature-name">RISK_FLAGS unified signal queue</div><div class="feature-detail">evidence_payload VARIANT · BCBS 239 Principle 2 traceability</div><span class="feature-tag tag-core">Phase 2</span></div>
+    <div class="feature-row"><div class="feature-check">✅</div><div class="feature-name">Cortex Analyst Semantic View</div><div class="feature-detail">18+ metrics · 30+ filters · 8 verified queries · regulatory metric names</div><span class="feature-tag tag-core">Phase 2</span></div>
+    <div class="feature-row"><div class="feature-check">✅</div><div class="feature-name">Cortex Search Service</div><div class="feature-detail">10 regulatory policy docs · ACTIVE · 200+ pages indexed</div><span class="feature-tag tag-core">Phase 2</span></div>
+    <div class="feature-row"><div class="feature-check">✅</div><div class="feature-name">CITADEL_AGENT Cortex Agent</div><div class="feature-detail">claude-sonnet-4-6 · Analyst + Search tools · MCP servers block</div><span class="feature-tag tag-core">Phase 3</span></div>
+    <div class="feature-row"><div class="feature-check">✅</div><div class="feature-name">Streamlit 3-tab App</div><div class="feature-detail">Chat + Dashboard + Audit Trail · action buttons · CSV export</div><span class="feature-tag tag-core">Phase 4</span></div>
+    <div class="feature-row"><div class="feature-check">✅</div><div class="feature-name">AI SAR Narrative (CORTEX.COMPLETE)</div><div class="feature-detail">FinCEN Field 35(a) format · cites FATF Advisory · auto-generated</div><span class="feature-tag tag-lastmile">Last-Mile</span></div>
+    <div class="feature-row"><div class="feature-check">✅</div><div class="feature-name">Real-time RISK_FLAGS_REFRESH Task</div><div class="feature-detail">15-min schedule · auto-ingests new flagged transactions</div><span class="feature-tag tag-lastmile">Last-Mile</span></div>
+    <div class="feature-row"><div class="feature-check">✅</div><div class="feature-name">Immutable AUDIT_LOG (58+ entries)</div><div class="feature-detail">All 3 action types · 90-day history · BCBS 239 compliance</div><span class="feature-tag tag-lastmile">Last-Mile</span></div>
+    <div class="feature-row"><div class="feature-check">✅</div><div class="feature-name">2 MCP Servers + OAuth</div><div class="feature-detail">CITADEL_AGENT_MCP + CITADEL_ACTIONS_MCP · client credentials flow</div><span class="feature-tag tag-stretch">Stretch</span></div>
+    <div class="feature-row"><div class="feature-check">✅</div><div class="feature-name">Cortex Extension Registry</div><div class="feature-detail">CITADEL_RISK_COPILOT published to PUBLIC · CoCo SKILL.md included</div><span class="feature-tag tag-stretch">Stretch</span></div>
+    <div class="feature-row"><div class="feature-check">✅</div><div class="feature-name">AI Executive Board Report</div><div class="feature-detail">Cortex.COMPLETE CRO-level summary · inline SQL · downloadable TXT</div><span class="feature-tag tag-stretch">Stretch</span></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 12 — LIVE DEMO WALKTHROUGH                               -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-12">
+  <div class="slide-header">
+    <span class="slide-num">11 / 12</span>
+    <span class="slide-title">Live Demo Walkthrough</span>
+    <div class="slide-rule"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:16px;width:100%;max-width:1000px;">
+    <div>
+      <div class="card-title" style="margin-bottom:10px;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--sf-ice);">Demo Sequence — Streamlit App</div>
+      <div class="demo-step">
+        <div class="demo-step-num">1</div>
+        <div class="demo-step-content">
+          <div class="demo-step-title">Open CITADEL_APP in Snowsight</div>
+          <div class="demo-step-detail">Snowsight → Projects → Streamlit → CITADEL_APP<br/><em>Show Dashboard tab — live KPI cards load automatically</em></div>
+        </div>
+      </div>
+      <div class="demo-step">
+        <div class="demo-step-num">2</div>
+        <div class="demo-step-content">
+          <div class="demo-step-title">Dashboard — Live KPI Cards</div>
+          <div class="demo-step-detail">9,315 open fraud flags · LCR breach days · 12 credit watch-list · 12 escalated cases<br/><em>Point out real-time numbers pulling from live tables</em></div>
+        </div>
+      </div>
+      <div class="demo-step">
+        <div class="demo-step-num">3</div>
+        <div class="demo-step-content">
+          <div class="demo-step-title">Quick Action — File SAR on CRITICAL Flag</div>
+          <div class="demo-step-detail">Click "📄 File SAR" on the top CRITICAL CROSS_BORDER flag<br/><em>AI generates FinCEN-format SAR narrative in ~3s</em></div>
+          <div class="demo-step-cmd">CALL FILE_SAR_DRAFT(flag_id, notes) → claude-sonnet-4-6 → FinCEN narrative</div>
+        </div>
+      </div>
+      <div class="demo-step">
+        <div class="demo-step-num">4</div>
+        <div class="demo-step-content">
+          <div class="demo-step-title">Audit Trail Tab</div>
+          <div class="demo-step-detail">Switch to Audit Trail → show SAR entry just created<br/><em>Filter by FILE_SAR — highlight immutability (no DELETE grant)</em></div>
+        </div>
+      </div>
+      <div class="demo-step">
+        <div class="demo-step-num">5</div>
+        <div class="demo-step-content">
+          <div class="demo-step-title">Chat Tab — Natural Language Q&amp;A</div>
+          <div class="demo-step-detail">Ask: <em>"Which accounts show fraud-risk patterns this week and what regulation applies?"</em></div>
+          <div class="demo-step-cmd">CITADEL_AGENT → Analyst SQL + Search RAG → cited response</div>
+        </div>
+      </div>
+      <div class="demo-step">
+        <div class="demo-step-num">6</div>
+        <div class="demo-step-content">
+          <div class="demo-step-title">AI Board Report</div>
+          <div class="demo-step-detail">Dashboard → click "Generate Board Report"<br/><em>CRO-level 3-paragraph summary citing Basel III, FATF, FinCEN · download as TXT</em></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card-title" style="margin-bottom:10px;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--sf-ice);">Demo Sequence — CoCo Agent</div>
+      <div class="demo-step">
+        <div class="demo-step-num">A</div>
+        <div class="demo-step-content">
+          <div class="demo-step-title">Run Python Demo Script</div>
+          <div class="demo-step-detail">Runs 8 pre-built questions against CITADEL_AGENT via REST API</div>
+          <div class="demo-step-cmd">python citadel/scripts/demo.py --connection Sept-6_AHap</div>
+        </div>
+      </div>
+      <div class="demo-step">
+        <div class="demo-step-num">B</div>
+        <div class="demo-step-content">
+          <div class="demo-step-title">Interactive Terminal Chat</div>
+          <div class="demo-step-detail">Ask questions directly in the terminal with streaming SSE responses</div>
+          <div class="demo-step-cmd">python citadel/scripts/chat.py --connection Sept-6_AHap</div>
+        </div>
+      </div>
+      <div class="demo-step">
+        <div class="demo-step-num">C</div>
+        <div class="demo-step-content">
+          <div class="demo-step-title">CoCo MCP via .cortex/mcp.json</div>
+          <div class="demo-step-detail">Use CITADEL tools directly in CoCo Desktop chat panel with OAuth auth</div>
+          <div class="demo-step-cmd">Set CITADEL_READER_CLIENT_ID + SECRET env vars</div>
+        </div>
+      </div>
+      <div style="margin-top:14px;">
+        <div class="card-title" style="margin-bottom:8px;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--sf-ice);">Deployment Health</div>
+        <div class="code-block" style="font-size:0.69rem;line-height:1.6;">
+<span class="cmt">-- Quick smoke test</span>
+<span class="kw">python</span> citadel/scripts/verify.py \
+  --connection Sept-6_AHap
+<span class="cmt">-- Checks all 14 Snowflake objects:</span>
+<span class="cmt">-- tables, views, agent, search,</span>
+<span class="cmt">-- MCP servers, task, extension</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 13 — THANK YOU                                           -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="slide title-slide" id="slide-13">
+  <div class="castle">🏰</div>
+  <div class="citadel-badge">CITADEL</div>
+  <div class="subtitle">End-to-end Risk, Fraud &amp; Regulatory Intelligence Copilot<br/>Built 100% on Snowflake — no external dependencies</div>
+  <div class="cards cards-3" style="margin-top:28px;max-width:860px;">
+    <div class="card" style="text-align:center;">
+      <div class="kpi-val ice" style="font-size:1.8rem;">7</div>
+      <div class="kpi-sub">Snowflake AI services used</div>
+      <div class="card-body" style="font-size:0.72rem;margin-top:4px;">Cortex Analyst · Search · Agent · COMPLETE · Tasks · Streamlit · Extensions</div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="kpi-val green" style="font-size:1.8rem;">4</div>
+      <div class="kpi-sub">Regulatory frameworks</div>
+      <div class="card-body" style="font-size:0.72rem;margin-top:4px;">Basel III · FATF · FinCEN BSA · RBI IRAC — all cited by AI in real time</div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="kpi-val amber" style="font-size:1.8rem;">15+</div>
+      <div class="kpi-sub">Hackathon features</div>
+      <div class="card-body" style="font-size:0.72rem;margin-top:4px;">All 4 phases + stretch goal + last-mile fixes — fully demo-ready</div>
+    </div>
+  </div>
+  <div class="tag-row" style="margin-top:22px;">
+    <span class="tag">🚀 Snowflake CoCo CLI Hackathon 2026</span>
+    <span class="tag">avinashreddy508 · JSTEYZM-MP60447</span>
+  </div>
+</div>
+
+</div><!-- #deck -->
+
+<!-- ── Navigation ── -->
+<div id="nav">
+  <button class="nav-btn" id="btn-prev">←</button>
+  <span id="slide-counter">1 / 13</span>
+  <div id="dots"></div>
+  <button class="nav-btn" id="btn-next">→</button>
+</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const total = slides.length;
+  let cur = 0;
+
+  const progress = document.getElementById('progress');
+  const counter  = document.getElementById('slide-counter');
+  const dotsEl   = document.getElementById('dots');
+
+  // Build dots
+  slides.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i===0?' active':'');
+    d.addEventListener('click', () => goTo(i));
+    dotsEl.appendChild(d);
+  });
+
+  function goTo(n) {
+    n = Math.max(0, Math.min(total-1, n));
+    slides[cur].classList.remove('active');
+    dotsEl.children[cur].classList.remove('active');
+    cur = n;
+    slides[cur].classList.add('active');
+    dotsEl.children[cur].classList.add('active');
+    counter.textContent = `${cur+1} / ${total}`;
+    progress.style.width = `${((cur+1)/total)*100}%`;
+
+    // Init charts on slide enter — never let a chart error break navigation
+    try { initCharts(cur); } catch (err) { /* keep nav alive */ }
+  }
+
+  document.getElementById('btn-prev').addEventListener('click', () => goTo(cur-1));
+  document.getElementById('btn-next').addEventListener('click', () => goTo(cur+1));
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); goTo(cur+1); }
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')                    { e.preventDefault(); goTo(cur-1); }
+    if (e.key === 'Home') goTo(0);
+    if (e.key === 'End')  goTo(total-1);
+    const n = parseInt(e.key);
+    if (!isNaN(n) && n >= 1 && n <= total) goTo(n-1);
+  });
+
+  // Init progress bar
+  progress.style.width = `${(1/total)*100}%`;
+
+  // ── Charts ──────────────────────────────────────────────────────
+  // Chart.js is served from /libs/ by the Snowflake report renderer and is not
+  // available when this deck is opened from disk (file://). All chart hooks are
+  // therefore optional and guarded — the deck is fully navigable either way.
+  const chartInit = {};
+  const HAS_CHART = (typeof Chart !== 'undefined');
+
+  function initCharts(slideIdx) {
+    if (chartInit[slideIdx]) return;
+    chartInit[slideIdx] = true;
+    if (!HAS_CHART) return;
+    // No canvas-based charts in this deck yet; slide visuals are pure CSS/HTML.
+  }
+
+  // Touch swipe
+  let touchX = null;
+  document.addEventListener('touchstart', e => { touchX = e.touches[0].clientX; });
+  document.addEventListener('touchend', e => {
+    if (touchX === null) return;
+    const dx = e.changedTouches[0].clientX - touchX;
+    if (Math.abs(dx) > 50) goTo(cur + (dx < 0 ? 1 : -1));
+    touchX = null;
+  });
+</script>
+</body>
+</html>

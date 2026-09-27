@@ -1,0 +1,19 @@
+definition_version: 2
+
+entities:
+  citadel_app:
+    type: streamlit
+    identifier:
+      name: CITADEL_APP
+      database: CITADEL_DB
+      schema: RISK
+    query_warehouse: CITADEL_WH
+    # Container runtime (Python 3.11). NEVER use warehouse runtime.
+    runtime_name: SYSTEM$ST_CONTAINER_RUNTIME_PY3_11
+    # Resolved from: SHOW PARAMETERS LIKE 'DEFAULT_STREAMLIT_COMPUTE_POOL' IN ACCOUNT
+    compute_pool: SYSTEM_COMPUTE_POOL_CPU
+    # No pyproject.toml — app uses only pre-installed packages (streamlit, pandas, requests,
+    # snowflake-connector-python). Omitting it avoids the EAI / PyPI resolution requirement.
+    main_file: streamlit_app.py
+    artifacts:
+      - streamlit_app.py

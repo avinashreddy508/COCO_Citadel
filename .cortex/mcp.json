@@ -1,0 +1,50 @@
+{
+  "_comment": [
+    "CoCo Desktop / CoCo CLI reads ~/.snowflake/cortex/mcp.json — NOT this file.",
+    "This copy is kept in the repo for reference and demo purposes only.",
+    "Required schema: 'type' must be present; OAuth goes in an 'oauth' block with",
+    "lowercase keys. A Cursor-style 'auth' block with CLIENT_ID/CLIENT_SECRET will",
+    "not connect. redirect_port must match a URI registered on the Snowflake OAuth",
+    "security integration (OAUTH_ALTERNATE_REDIRECT_URIS).",
+    "",
+    "Account: VFWIQMM-HB26136 (redeployed here from JSTEYZM-MP60447).",
+    "Registered redirect URIs on this account:",
+    "  CITADEL_MCP_READER_OAUTH -> http://localhost:8586/callback",
+    "  CITADEL_MCP_ACTION_OAUTH -> http://localhost:8585/callback",
+    "",
+    "The action integration is scoped to CITADEL_COMPLIANCE_OFFICER because the",
+    "action procedures guard on CURRENT_ROLE() and run EXECUTE AS CALLER.",
+    "",
+    "client_id/client_secret below are placeholders — put the real values (from",
+    "SYSTEM$SHOW_OAUTH_CLIENT_SECRETS) only in the real ~/.snowflake/cortex/mcp.json,",
+    "never committed here."
+  ],
+  "mcpServers": {
+    "citadel-ai": {
+      "type": "http",
+      "url": "https://vfwiqmm-hb26136.snowflakecomputing.com/api/v2/databases/CITADEL_DB/schemas/RISK/mcp-servers/CITADEL_AGENT_MCP_SERVER",
+      "oauth": {
+        "client_id": "${env:CITADEL_READER_CLIENT_ID}",
+        "client_secret": "${env:CITADEL_READER_CLIENT_SECRET}",
+        "client_name": "Cortex Code",
+        "redirect_port": 8586,
+        "scope": "session:role:CITADEL_MCP_READER_ROLE",
+        "authorization_server_url": "https://vfwiqmm-hb26136.snowflakecomputing.com/oauth"
+      },
+      "timeout": 180000
+    },
+    "citadel-actions": {
+      "type": "http",
+      "url": "https://vfwiqmm-hb26136.snowflakecomputing.com/api/v2/databases/CITADEL_DB/schemas/RISK/mcp-servers/CITADEL_ACTIONS_MCP_SERVER",
+      "oauth": {
+        "client_id": "${env:CITADEL_ACTION_CLIENT_ID}",
+        "client_secret": "${env:CITADEL_ACTION_CLIENT_SECRET}",
+        "client_name": "Cortex Code",
+        "redirect_port": 8585,
+        "scope": "session:role:CITADEL_COMPLIANCE_OFFICER",
+        "authorization_server_url": "https://vfwiqmm-hb26136.snowflakecomputing.com/oauth"
+      },
+      "timeout": 120000
+    }
+  }
+}
